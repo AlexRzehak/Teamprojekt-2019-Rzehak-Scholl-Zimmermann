@@ -1,7 +1,9 @@
 # Teamprojekt Python & Qt SS2019
 
-### A solution to the second task will be added soon.
+
+### GitHub Pages blog
+A corresponding blog to our project can be found [here](https://alexrzehak.github.io/Teamprojekt-2019-Rzehak-Scholl-Zimmermann/)!
 ***
-### A GitHub pages blog will follow.
+### A solution to the second task will be added soon.
 ***
 Use the requirements.txt to install needed python libraries.
