@@ -2,7 +2,10 @@ import sys
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QWidget, QApplication
-from PyQt5.QtGui import QPainter, QColor, QBrush
+from PyQt5.QtGui import QPainter, QColor, QBrush, QIcon
+
+WSIZE = int(input("Please type your desired size of the Window: "))
+OFFSET = int(input("How wide do you want the border?  "))
 
 
 class Chess(QWidget):
@@ -14,11 +17,13 @@ class Chess(QWidget):
 
     def initUI(self):
 
-        # we need a window of size 1000 x 1000 for this task
-        # since most screens nowadays have 1920x1080 resolution,
+        # here the initially set size if the window gets used
+        # since the default window size for this task is 1000 x 1000
+        # and most screens nowadays have 1920x1080 resolution,
         # we choose the y-offset to be 40
-        self.setGeometry(300, 40, 1000, 1000)
+        self.setGeometry(300, 40, WSIZE, WSIZE)
         self.setWindowTitle('Chess')
+        self.setWindowIcon(QIcon('web.png'))
         self.show()
 
     # The paintEvent will call the drawBoard() method,
@@ -32,18 +37,15 @@ class Chess(QWidget):
 
     def drawBoard(self, qp):
 
-        # define size and offset of the chess board. should be multiple of 8.
-        # this could be done at a previous step but since for this task the
-        # values are fix, we choose to define the parameters at this point.
-        size = 968
-        offset = 16
-        tileSize = size/8
+        # compute the size of the actual Chessboard
+        chessSize = WSIZE - 2 * OFFSET
+        tileSize = chessSize/8
 
         # we vectors of x and y positions for the topleft corner of the
         # black squares of the board.
         # there are two different vectors needed: one with additional
         # offset of one tile size and one without.
-        vec1 = [offset + 2 * tileSize * a for a in range(4)]
+        vec1 = [OFFSET + 2 * tileSize * a for a in range(4)]
         vec2 = [tileSize + a for a in vec1]
 
         # we now need all possible combinations of those two vectors.
@@ -54,7 +56,7 @@ class Chess(QWidget):
         # we get us a white brush and paint the white background of the board
         # nothing to see here
         qp.setBrush(QColor(255, 255, 255))
-        qp.drawRect(offset, offset, size, size)
+        qp.drawRect(OFFSET, OFFSET, chessSize, chessSize)
 
         # since we don't want the black tiles to have additional borders,
         # we need to disable the pen
@@ -71,7 +73,6 @@ class Chess(QWidget):
 
 
 if __name__ == '__main__':
-
     app = QApplication(sys.argv)
     ch = Chess()
     sys.exit(app.exec_())
