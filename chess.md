@@ -2,10 +2,17 @@
 
 ### [<- Back](/index.md) to project overview.
 
-- **1.** Da das Fenster nach Voraussetzung 1000x1000 pixel haben soll und die meisten Monitore nur eine Auflösung von 1920x1080 pixel haben, muss man aufpassen, das Fenster nicht teilweise außerhelb des Bilschirms zu platzieren.
-- **2.** Bei dieser Lösung wird ein weißer Hintergrund gezeichnet, um dann schwarze Felder darauf zu Zeichnen
-- **3.** Der Hintergrund ist schwarz umrandet, da der pen hier noch enabled ist, während die Tiles nicht umrandet sind, da der pen hier disabled ist.
-- **4.** Am Anfang wird einmal in der Console vom User abgefragt, wie groß das Fenster und wie breit der Rand sein soll. Daraus wird dann berechnet, wie groß das eigentliche Schachbrett und die einzelnen Tiles sein werden
+Our solution to the task of painting a chessboard on a 1000x1000 Window:
 
+First the global variables WSIZE and OFFSET are set by a user-input in the console. WSIZE represents the size of the Window, OFFSET the width of the margin on the sides of the window. 
+We then set the Window to the size WSIZExWSIZE at the position 310, 40 (this way a window of the original size 1000x1000 will be in the middle of a 1920x1080 screen).
+The Chessbard itself is a scaled with the Window (the margin is substracted): 
+chessSize = WSIZE - 2 * OFFSET, 
+tileSize = chessSize/8
+
+A white background with a black border in the size of the chessBoard will serve as all the white tiles and yield a border around the whole board. The black tiles then get painted on with the pen disabled to prevent antoher border.
+
+There are a number of different ways to paint the tiles. For example one can simply set up each of the 32 tiles seperatly. Another possibility would be to create a nested for-loop (rows and collumns).
+We ended up opting for a vectorial solution:
 
 More information will likely follow.
