@@ -23,7 +23,7 @@ class Chess(QWidget):
         # we choose the y-offset to be 40
         self.setGeometry(300, 40, WSIZE, WSIZE)
         self.setWindowTitle('Chess')
-        self.setWindowIcon(QIcon('web.png'))
+        self.setWindowIcon(QIcon('~/Desktop/chess.ico'))
         self.show()
 
     # The paintEvent will call the drawBoard() method,
