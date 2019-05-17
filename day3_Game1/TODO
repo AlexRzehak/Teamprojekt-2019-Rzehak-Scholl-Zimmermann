@@ -1,8 +1,16 @@
+1. Klasse erstellen die das Spielfeld repräsentiert - DONE (siehe firstTake.py)
+2. Spielfeld zeichnen 1000x1000 - DONE (siehe firstTake.py)
+  2.1 mit Grid in 10x10 blöcke unterteilt - DONE
+  2.2 spielfeld über ein 100x100 Array konfigurierbar machen - DONE
+  2.3 Wand als schwarzen Block auf dem Spielfeld 'markieren' - DONE
+  
+  
 3. Klasse für Roboter erstellen
   1.1 Attribute: x,y,r,alpha (Pos,Pos,Radius,Blickwinkel)
   1.2 Roboter 'zeichnen' und auf screen Anzeigen
 4. Timer erstellen um Roboter über spielfeld fahren zu lassen
 
 optional: 
-5. weitere Hindernisarten hinzufügen (2,3,...) im array
-6. weitere Ideen: Kollisionsabfrage, Roboter anders bewegen,...
+5. Hindernissee vernünftig auf dem Spielfeld verteilen
+6. weitere Hindernisarten (Loch etc.) hinzufügen (2,3,...) im array
+7. weitere Ideen: Kollisionsabfrage, Roboter anders bewegen,...
