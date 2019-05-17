@@ -1,0 +1,8 @@
+3. Klasse für Roboter erstellen
+  1.1 Attribute: x,y,r,alpha (Pos,Pos,Radius,Blickwinkel)
+  1.2 Roboter 'zeichnen' und auf screen Anzeigen
+4. Timer erstellen um Roboter über spielfeld fahren zu lassen
+
+optional: 
+5. weitere Hindernisarten hinzufügen (2,3,...) im array
+6. weitere Ideen: Kollisionsabfrage, Roboter anders bewegen,...
