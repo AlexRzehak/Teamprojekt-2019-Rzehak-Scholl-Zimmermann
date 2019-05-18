@@ -2,6 +2,7 @@ from PyQt5.QtWidgets import QWidget, QApplication
 from PyQt5.QtGui import QPainter, QColor, QBrush, QPen
 from PyQt5.QtCore import Qt
 import sys
+import Robot
 
 FIELD_SIZE = 1000
 TILE_SIZE = 10
@@ -41,6 +42,7 @@ class PlayingField(QWidget):
         qp.begin(self)
         self.drawGrid(qp)
         self.drawObstacles(qp)
+        self.drawRobot(Robot.TestRobot, qp)
         qp.end()
 
     def drawGrid(self, qp):
@@ -72,6 +74,12 @@ class PlayingField(QWidget):
             for col in range(arraysize):
                 if obstacleArray[row][col] == 1:
                     qp.drawRect(row*TILE_SIZE, col*TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                    
+    def drawRobot(self, Robot, qp):
+        
+        qp.setBrush(Qt.magenta)
+        qp.drawRect(Robot.position[0] * TILE_SIZE, Robot.position[1] * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+
 
 
 if __name__ == '__main__':
