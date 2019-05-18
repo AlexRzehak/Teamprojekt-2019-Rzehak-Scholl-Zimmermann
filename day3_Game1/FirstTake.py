@@ -49,8 +49,11 @@ class PlayingField(QWidget):
         #using the constants TILE_SIZE and FIELD_SIZE to determine the size
         pen = QPen(Qt.black, .1, Qt.SolidLine)
         qp.setPen(pen)
+        # horizontal lines
         for horizontal in range(0, FIELD_SIZE, TILE_SIZE):
             qp.drawLine(0, horizontal, FIELD_SIZE, horizontal)
+            
+        # vertical lines
         for vertical in range (0, FIELD_SIZE, TILE_SIZE):
             qp.drawLine(vertical, 0, vertical, FIELD_SIZE)
 
