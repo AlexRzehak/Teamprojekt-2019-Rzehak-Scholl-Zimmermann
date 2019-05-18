@@ -25,7 +25,7 @@ class PlayingField:
 ```
 
 2. Draw the actual Playing Field:
-  2.1 1000x1000 Window:
+    1. 1000x1000 Window:
 ```
 FIELD_SIZE = 1000
 TILE_SIZE = 10
@@ -50,7 +50,7 @@ class drawFinishedBoard(QWidget):
         self.drawRobot(Robot.TestRobot, qp)
         qp.end()
 ```
-  2.2 Draw BlackSquares for Wall pieces:
+2.2 Draw BlackSquares for Wall pieces:
   
 ```
     def drawObstacles(self, qp):
@@ -86,7 +86,7 @@ TestRobot = Robot(10, 20, 10, 765)
 ```
 
 4. drawing the Robot (in class drawFinishedBoard):
-  4.1 drawing circle at the right Position
+    1. drawing circle at the right Position
 ```
     def drawRobot(self, Robot, qp):
         
