@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import QWidget, QApplication
 from PyQt5.QtGui import QPainter, QColor, QBrush, QPen
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt , QPoint
 import sys
 import Robot
 
@@ -77,8 +77,18 @@ class PlayingField(QWidget):
                     
     def drawRobot(self, Robot, qp):
         
-        qp.setBrush(Qt.magenta)
-        qp.drawRect(Robot.position[0] * TILE_SIZE, Robot.position[1] * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+        # setting circle color and transparency
+        qp.setBrush(QColor(133, 242, 252, 100))
+        # calculating center point of the circle
+        center = QPoint(Robot.x * TILE_SIZE, Robot.y * TILE_SIZE)
+        # drawing the circle with the position and radius of the Robot
+        qp.drawEllipse(center, Robot.radius * 2, Robot.radius * 2)
+
+        # marking center point
+        # setting center color
+        qp.setBrush(Qt.white)
+        # drawing small circle
+        qp.drawEllipse(center, 2, 2)
 
 
 
