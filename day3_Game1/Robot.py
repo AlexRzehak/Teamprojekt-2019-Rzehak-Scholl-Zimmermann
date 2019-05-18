@@ -12,15 +12,5 @@ class Robot:
         self.radius = radius
         self.alpha = alpha
         self.position = [x, y]
-
-    def paintEvent(self, e):
-        qp = QPainter()
-        qp.begin(self)
-        self.drawRobot(qp)
-        qp.end()
-
-    def drawRobot(self, qp):
-        qp.setBrush(Qt.magenta)
-        qp.drawRect(self.position[0] * TILE_SIZE, self.position[1] * TILE_SIZE, TILE_SIZE, TILE_SIZE)
-
-
+        
+TestRobot = Robot (10,20, 5, 45)
