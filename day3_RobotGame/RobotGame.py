@@ -6,7 +6,6 @@ import math
 
 FIELD_SIZE = 1000
 TILE_SIZE = 10
-BORDER_SIZE = 0
 
 
 class Game(QMainWindow):
@@ -22,17 +21,17 @@ class Game(QMainWindow):
         self.setCentralWidget(self.board)
 
         # setting up Window
-        window_size = FIELD_SIZE + 2 * BORDER_SIZE
-        y_offset = (1080 - window_size) / 2
-        self.setGeometry(300, y_offset, window_size, window_size)
+        y_offset = (1080 - FIELD_SIZE) / 2
+        self.setGeometry(300, y_offset, FIELD_SIZE, FIELD_SIZE)
         self.setWindowTitle('RobotGame')
         self.show()
 
 
 class Board(QWidget):
+    """Task 1: This class represents the game board."""
 
     TileCount = int(FIELD_SIZE / TILE_SIZE)
-    RefreshSpeed = 200
+    RefreshSpeed = 150
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -41,6 +40,8 @@ class Board(QWidget):
                               for row in range(Board.TileCount)]
         self.robot = None
         self.timer = QBasicTimer()
+
+        # Recognize input froum mouse and keyboard.
         self.setFocusPolicy(Qt.StrongFocus)
 
         self.initBoardState()
@@ -59,15 +60,17 @@ class Board(QWidget):
         # setting the sidewalls by setting all the first and last Elements
         # of each row and column to 1
         for x in range(size):
-            array[x][0] = 1
-            array[x][size - 1] = 1
-            array[0][x] = 1
-            array[size - 1][x] = 1
+            array[x][0] = 2
+            array[x][size - 1] = 2
+            array[0][x] = 2
+            array[size - 1][x] = 2
 
         # individual Wall tiles:
         array[28][34] = 1
         array[54][43] = 1
-        array[0][49] = 0
+        array[5][49] = 3
+        array[0][30] = 0
+        array[99][30] = 0
 
         return array
 
@@ -81,6 +84,7 @@ class Board(QWidget):
         qp.end()
 
     def drawBoard(self, qp):
+        """"Task 2: Draw the board and its tiles."""
 
         # painting a grid to showcase the tiles
         # using the constants TILE_SIZE and FIELD_SIZE to determine the size
@@ -95,20 +99,36 @@ class Board(QWidget):
             qp.drawLine(vertical, 0, vertical, FIELD_SIZE)
 
     def drawObstacles(self, qp):
+        """Task 3: Paint the different hazards given by obstacleArray."""
+        for xpos in range(Board.TileCount):
+            for ypos in range(Board.TileCount):
 
-        # setting Wallcolor
-        qp.setBrush(Qt.black)
+                tileVal = self.obstacleArray[xpos][ypos]
 
-        # painting a wallpiece when there is a 1 in the array
-        # TODO make less ugly
-        for row in range(Board.TileCount):
-            for col in range(Board.TileCount):
-                if self.obstacleArray[row][col] == 1:
-                    qp.drawRect(row * TILE_SIZE, col *
-                                TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                if tileVal == Hazard.Wall:
+                    brush = QBrush(Qt.Dense2Pattern)
+                    brush.setColor(Qt.red)
+                    qp.setBrush(brush)
+                    qp.drawRect(xpos * TILE_SIZE,
+                                ypos * TILE_SIZE,
+                                TILE_SIZE, TILE_SIZE)
 
-    # TODO maybe move to BaseRobot class
+                elif tileVal == Hazard.Border:
+                    brush = QBrush(Qt.Dense2Pattern)
+                    brush.setColor(Qt.blue)
+                    qp.setBrush(brush)
+                    qp.drawRect(xpos * TILE_SIZE,
+                                ypos * TILE_SIZE,
+                                TILE_SIZE, TILE_SIZE)
+
+                elif tileVal == Hazard.Hole:
+                    qp.setBrush(Qt.black)
+                    center = QPoint(xpos * TILE_SIZE + 0.5 * TILE_SIZE,
+                                    ypos * TILE_SIZE + 0.5 * TILE_SIZE)
+                    qp.drawEllipse(center, 0.5 * TILE_SIZE, 0.25 * TILE_SIZE)
+
     def drawRobot(self, qp):
+        """Task 5: Paint the robot on the board. Mind its direction."""
 
         rb = self.robot
 
@@ -136,94 +156,66 @@ class Board(QWidget):
         qp.drawEllipse(center, 2, 2)
 
     def timerEvent(self, event):
+        """Task 6: A timer moving the Robot step by step
+         while follwing its current command.
+        """
 
-        # simple movement command
-        # TODO should be re-implemented to avoid working
-        # directly with the robots coordinates
-        # if not self.robot.x >= 98:
-        #     self.robot.moveStep('east')
-        # elif not self.robot.y >= 98:
-        #     self.robot.moveStep('south')
+        self.robot.followCommand(self.obstacleArray)
 
         # update visuals
-        self.followCommand()
-        # print(self.robot.x, self.robot.y)
         self.update()
 
-    # TODO this should not exist
+    def mousePressEvent(self, event):
+        mouseX = int((event.x()) / TILE_SIZE)
+        mouseY = int((event.y()) / TILE_SIZE)
+        dx = self.robot.x - mouseX
+        dy = self.robot.y - mouseY
+
+        if abs(dx) > abs(dy):
+            if dx > 0:
+                self.robot.command = ('west', abs(dx))
+            else:
+                self.robot.command = ('east', abs(dx))
+        else:
+            if dy > 0:
+                self.robot.command = ('north', abs(dy))
+            else:
+                self.robot.command = ('south', abs(dy))
+
+    # TODO this should not exist.
     def keyPressEvent(self, event):
 
         key = event.key()
 
         if key == Qt.Key_Left:
-            self.checkStep('west')
+            self.robot.moveStep('west', self.obstacleArray)
 
         elif key == Qt.Key_Right:
-            self.checkStep('east')
+            self.robot.moveStep('east', self.obstacleArray)
 
         elif key == Qt.Key_Up:
-            self.checkStep('north')
+            self.robot.moveStep('north', self.obstacleArray)
 
         elif key == Qt.Key_Down:
-            self.checkStep('south')
+            self.robot.moveStep('south', self.obstacleArray)
 
         self.update()
 
-    def mousePressEvent(self, event):
-        mouseX = int((event.x() - BORDER_SIZE) / TILE_SIZE)
-        mouseY = int((event.y() - BORDER_SIZE) / TILE_SIZE)
-        dx = self.robot.x - mouseX
-        dy = self.robot.y - mouseY
 
-        if (abs(dx) > abs(dy)):
-            if dx > 0:
-                self.robot.command = ['west', abs(dx)]
-            else:
-                self.robot.command = ['east', abs(dx)]
-        else:
-            if dy > 0:
-                self.robot.command = ['north', abs(dy)]
-            else:
-                self.robot.command = ['south', abs(dy)]
-
-    def followCommand(self):
-        if self.robot.command[1]:
-            self.checkStep(self.robot.command[0])
-            self.robot.command[1] = self.robot.command[1] - 1
-
-    def checkStep(self, direction: str):
-        # TODO separate robot from board
-        # TODO make less idiotic
-        rbx = self.robot.x
-        rby = self.robot.y
-
-        # TODO don't use implicit border
-        if direction == 'north':
-            if rby - 1 > 0:
-                self.robot.place(rbx, rby - 1, 'north')
-            else:
-                self.robot.place(rbx, rby, 'north')
-
-        elif direction == 'south':
-            if rby + 1 < Board.TileCount - 1:
-                self.robot.place(rbx, rby + 1, 'south')
-            else:
-                self.robot.place(rbx, rby, 'south')
-
-        elif direction == 'east':
-            if rbx + 1 < Board.TileCount - 1:
-                self.robot.place(rbx + 1, rby, 'east')
-            else:
-                self.robot.place(rbx, rby, 'east')
-
-        elif direction == 'west':
-            if rbx - 1 > 0:
-                self.robot.place(rbx - 1, rby, 'west')
-            else:
-                self.robot.place(rbx, rby, 'west')
+class Hazard():
+    """ A namespace for the different types of tiles on the board.
+    Might contain additional functionality later.
+    """
+    Empty = 0
+    Wall = 1
+    Border = 2
+    Hole = 3
 
 
 class BaseRobot():
+    """Task 4: A class representing a robot with positioning parameters.
+     We added some control logic.
+    """
 
     def __init__(self, x, y, radius, alpha):
 
@@ -231,52 +223,52 @@ class BaseRobot():
         self.y = y
         self.radius = radius
         self.alpha = alpha
-        # TODO
-        # self.position = [x, y]
-        # TODO
-        self.command = ['stay', 0]
 
-    def place(self, newX: int, newY: int, direction: str):
-        self.x = newX
-        self.y = newY
+        # the current command executed by the robot
+        self.command = ('stay', 0)
 
-        if direction == 'north':
-            self.alpha = 0
+    def followCommand(self, obstacleArray):
+        direction, distance = self.command
 
-        elif direction == 'south':
-            self.alpha = 180
+        if distance:
+            self.moveStep(direction, obstacleArray)
+            self.command = (direction, distance - 1)
 
-        elif direction == 'east':
-            self.alpha = 90
+    def moveStep(self, direction: str, obstacleArray):
 
-        elif direction == 'west':
-            self.alpha = 270
+        directions = dict(north=(0, -1, 0),
+                          south=(0, 1, 180),
+                          east=(1, 0, 90),
+                          west=(-1, 0, 270))
+
+        x_add, y_add, new_alpha = directions[direction]
+        new_x, new_y = self.x + x_add, self.y + y_add
+
+        # robot will do the pacman
+        new_x, new_y = new_x % Board.TileCount, new_y % Board.TileCount
+
+        tileVal = obstacleArray[new_x][new_y]
+
+        if tileVal == Hazard.Empty:
+            self.x = new_x
+            self.y = new_y
+
+        elif tileVal == Hazard.Wall:
+            pass
+
+        elif tileVal == Hazard.Border:
+            pass
+
+        elif tileVal == Hazard.Hole:
+            self.x = 1
+            self.y = 1
+
+        self.alpha = new_alpha
 
     @staticmethod
     def createExampleRobot(boardSize: int, tileSize: int):
 
         return BaseRobot(1, 1, tileSize/2, 45)
-
-
-# TODO
-class Hazard():
-    pass
-
-
-class Wall(Hazard):
-    pass
-
-
-class Border(Hazard):
-    pass
-
-
-class Hole(Hazard):
-    pass
-
-
-class Teleporter(Hazard):
-    pass
 
 
 if __name__ == '__main__':
