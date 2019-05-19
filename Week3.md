@@ -9,7 +9,7 @@ class PlayingField:
     def setupArray(self, arraysize):
         obstacleArray = [[0 for col in range(arraysize)] for row in range(arraysize)]
 
-        # creating by setting all the first and last Elements of each row and column to 1
+        # creating sidewalls by setting all the first and last Elements of each row and column to 1
         for x in range(arraysize):
             obstacleArray[x][0] = 1
             obstacleArray[x][arraysize - 1] = 1
