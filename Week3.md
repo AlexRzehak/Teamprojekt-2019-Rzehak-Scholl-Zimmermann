@@ -108,7 +108,8 @@ TestRobot = Robot(10, 20, 10, 765)
 ```
         # calculating the point to draw the line that indicates alpha
         radian = ((Robot.alpha - 90) / 180 * math.pi)
-        direction = QPoint(math.cos(radian) * Robot.radius + QPoint.x(center), math.sin(radian) * Robot.radius + QPoint.y(center))
+        direction = QPoint(math.cos(radian) * Robot.radius + QPoint.x(center), 
+                           math.sin(radian) * Robot.radius + QPoint.y(center))
         # setting color of directional line
         qp.setPen(QPen(Qt.red, .8))
         qp.drawLine(QPoint.x(center), QPoint.y(center), QPoint.x(direction), QPoint.y(direction))
