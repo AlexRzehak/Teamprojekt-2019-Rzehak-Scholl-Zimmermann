@@ -5,10 +5,10 @@
   2.3 Wand als schwarzen Block auf dem Spielfeld 'markieren' - DONE
   
   
-3. Klasse für Roboter erstellen
-  1.1 Attribute: x,y,r,alpha (Pos,Pos,Radius,Blickwinkel)
-  1.2 Roboter 'zeichnen' und auf screen Anzeigen
-4. Timer erstellen um Roboter über spielfeld fahren zu lassen
+3. Klasse für Roboter erstellen - DONE
+  1.1 Attribute: x,y,r,alpha (Pos,Pos,Radius,Blickwinkel) - DONE
+  1.2 Roboter 'zeichnen' und auf screen Anzeigen - DONE
+4. Timer erstellen um Roboter über spielfeld fahren zu lassen - (DONE)
 
 optional: 
 5. Hindernissee vernünftig auf dem Spielfeld verteilen
