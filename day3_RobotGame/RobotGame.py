@@ -41,6 +41,7 @@ class Board(QWidget):
                               for row in range(Board.TileCount)]
         self.robot = None
         self.timer = QBasicTimer()
+        self.setFocusPolicy(Qt.StrongFocus)
 
         self.initBoardState()
         self.timer.start(Board.RefreshSpeed, self)
@@ -139,13 +140,87 @@ class Board(QWidget):
         # simple movement command
         # TODO should be re-implemented to avoid working
         # directly with the robots coordinates
-        if not self.robot.x >= 98:
-            self.robot.moveStep('east')
-        elif not self.robot.y >= 98:
-            self.robot.moveStep('south')
+        # if not self.robot.x >= 98:
+        #     self.robot.moveStep('east')
+        # elif not self.robot.y >= 98:
+        #     self.robot.moveStep('south')
 
         # update visuals
+        self.followCommand()
+        # print(self.robot.x, self.robot.y)
         self.update()
+
+    # TODO this should not exist
+    def keyPressEvent(self, event):
+
+        key = event.key()
+
+        if key == Qt.Key_Left:
+            self.checkStep('west')
+
+        elif key == Qt.Key_Right:
+            self.checkStep('east')
+
+        elif key == Qt.Key_Up:
+            self.checkStep('north')
+
+        elif key == Qt.Key_Down:
+            self.checkStep('south')
+
+        self.update()
+
+    def mousePressEvent(self, event):
+        mouseX = int((event.x() - BORDER_SIZE) / TILE_SIZE)
+        mouseY = int((event.y() - BORDER_SIZE) / TILE_SIZE)
+        dx = self.robot.x - mouseX
+        dy = self.robot.y - mouseY
+
+        if (abs(dx) > abs(dy)):
+            if dx > 0:
+                self.robot.command = ['west', abs(dx)]
+            else:
+                self.robot.command = ['east', abs(dx)]
+        else:
+            if dy > 0:
+                self.robot.command = ['north', abs(dy)]
+            else:
+                self.robot.command = ['south', abs(dy)]
+
+    def followCommand(self):
+        if self.robot.command[1]:
+            self.checkStep(self.robot.command[0])
+            self.robot.command[1] = self.robot.command[1] - 1
+
+    def checkStep(self, direction: str):
+        # TODO separate robot from board
+        # TODO make less idiotic
+        rbx = self.robot.x
+        rby = self.robot.y
+
+        # TODO don't use implicit border
+        if direction == 'north':
+            if rby - 1 > 0:
+                self.robot.place(rbx, rby - 1, 'north')
+            else:
+                self.robot.place(rbx, rby, 'north')
+
+        elif direction == 'south':
+            if rby + 1 < Board.TileCount - 1:
+                self.robot.place(rbx, rby + 1, 'south')
+            else:
+                self.robot.place(rbx, rby, 'south')
+
+        elif direction == 'east':
+            if rbx + 1 < Board.TileCount - 1:
+                self.robot.place(rbx + 1, rby, 'east')
+            else:
+                self.robot.place(rbx, rby, 'east')
+
+        elif direction == 'west':
+            if rbx - 1 > 0:
+                self.robot.place(rbx - 1, rby, 'west')
+            else:
+                self.robot.place(rbx, rby, 'west')
 
 
 class BaseRobot():
@@ -156,24 +231,25 @@ class BaseRobot():
         self.y = y
         self.radius = radius
         self.alpha = alpha
+        # TODO
         # self.position = [x, y]
+        # TODO
+        self.command = ['stay', 0]
 
-    def moveStep(self, direction: str):
+    def place(self, newX: int, newY: int, direction: str):
+        self.x = newX
+        self.y = newY
 
         if direction == 'north':
-            self.y = self.y - 1
             self.alpha = 0
 
         elif direction == 'south':
-            self.y = self.y + 1
             self.alpha = 180
 
         elif direction == 'east':
-            self.x = self.x + 1
             self.alpha = 90
 
         elif direction == 'west':
-            self.x = self.x - 1
             self.alpha = 270
 
     @staticmethod
