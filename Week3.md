@@ -430,3 +430,190 @@ class Board(QWidget):
         # update visuals
         self.update()
 ```
+
+## Obstacles
+### We want to distinguish more different kinds of board hazards!
+Since Walls are represented by a number 1 in the `obstacleArray`, the other hazards could be the next bigger integers.
+```python
+@staticmethod
+    def createExampleArray(size: int):
+
+        array = [[0] * size for row in range(size)]
+
+        # setting the sidewalls by setting all the first and last Elements
+        # of each row and column to 1
+        for x in range(size):
+            array[x][0] = 2
+            array[x][size - 1] = 2
+            array[0][x] = 2
+            array[size - 1][x] = 2
+
+        # individual Wall tiles:
+        array[28][34] = 1
+        array[54][43] = 1
+        array[5][49] = 3
+        array[0][30] = 0
+        array[99][30] = 0
+
+return array
+```
+
+## Subproblem: Identification of board hazards.
+### We might want to handle the hazards at more than one point in the program.
+The implementation should consider extensibility!
+```python
+# 0 = Empty Tile
+# 1 = Wall
+# 2 = Border
+# 3 = Hole
+```
+
+## Solution: Identification of board hazards.
+### We use a namespace class.
+That way, we might add basic functionalities to the class later! We can now use at any point of the code the identifier `Hazard.Wall`, if we mean a wall.
+```python
+class Hazard():
+    Empty = 0
+    Wall = 1
+    Border = 2
+    Hole = 3
+```
+
+### Let's update the drawObstacles function to paint the different hazard types:
+```python
+def drawObstacles(self, qp):
+        for xpos in range(Board.TileCount):
+            for ypos in range(Board.TileCount):
+
+                tileVal = self.obstacleArray[xpos][ypos]
+
+                # still no need to redraw an empty tile!
+
+                # we use a bit prettier visuals
+                if tileVal == Hazard.Wall:
+                    brush = QBrush(Qt.Dense2Pattern)
+                    brush.setColor(Qt.red)
+                    qp.setBrush(brush)
+                    qp.drawRect(xpos * TILE_SIZE,
+                                ypos * TILE_SIZE,
+                                TILE_SIZE, TILE_SIZE)
+
+                elif tileVal == Hazard.Border:
+                    brush = QBrush(Qt.Dense2Pattern)
+                    brush.setColor(Qt.blue)
+                    qp.setBrush(brush)
+                    qp.drawRect(xpos * TILE_SIZE,
+                                ypos * TILE_SIZE,
+                                TILE_SIZE, TILE_SIZE)
+
+                elif tileVal == Hazard.Hole:
+                    qp.setBrush(Qt.black)
+                    center = QPoint(xpos * TILE_SIZE + 0.5 * TILE_SIZE,
+                                    ypos * TILE_SIZE + 0.5 * TILE_SIZE)
+                    qp.drawEllipse(center, 0.5 * TILE_SIZE, 0.25 * TILE_SIZE)
+```
+
+## Subproblem: Interact with the hazards.
+### If we want to interact with our hazards, we need to check the next field before entering it. Else we would walk into a wall.
+We have a spot for this kind of functionality in our `moveStep` function:
+```python
+class Board(QWidget):
+
+    def moveStep(self, direction: str):
+
+        directions = dict(north=(0, -1, 0),
+                          south=(0, 1, 180),
+                          east=(1, 0, 90),
+                          west=(-1, 0, 270))
+
+        # We work directly with attributes of the robot!
+        x_add, y_add, new_alpha = directions[direction]
+        new_x = self.robot.x + x_add
+        new_y = self.robot.y + y_add
+
+        # don't forget to turn the robot
+        self.robot.alpha = new_alpha
+
+        self.handle_next_tile(new_x, new_y)
+
+    # This should not be placed here!
+    def handle_next_tile(self, xpos, ypos):
+        # we need the obstacleArray!
+        tileType = self.obstacleArray[xpos][ypos]
+
+        # TODO
+
+```
+On one hand, we logically work directly with features and traits of the robot (like its coordinates). On the other hand, we need the information of the `obstacleArray` to resolve the interactions with the hazards correctly.
+
+## Solution: Interact with hazards
+### We move the stepping functionality to the `BaseRobot` class. To resolve interactions correctly, we pass the `obstacleArray` as an additional argument.
+```python
+class BaseRobot():
+
+    def __init__(self, x, y, radius, alpha):
+
+        self.x = x
+        self.y = y
+        self.radius = radius
+        self.alpha = alpha
+        self.command = ('stay', 0)
+
+    # We get the obstacleArray as additional argument!
+    def moveStep(self, direction: str, obstacleArray):
+
+        directions = dict(north=(0, -1, 0),
+                          south=(0, 1, 180),
+                          east=(1, 0, 90),
+                          west=(-1, 0, 270))
+
+        x_add, y_add, new_alpha = directions[direction]
+        new_x, new_y = self.x + x_add, self.y + y_add
+
+        # now that we have borders, what happens if borders are missing?
+        new_x, new_y = new_x % Board.TileCount, new_y % Board.TileCount
+
+        tileVal = obstacleArray[new_x][new_y]
+
+        if tileVal == Hazard.Empty:
+            self.x = new_x
+            self.y = new_y
+
+        # explicit to show the different hazard types.
+        elif tileVal == Hazard.Wall:
+            pass
+
+        elif tileVal == Hazard.Border:
+            pass
+
+        # this hole will respawn you at the topleft position.
+        elif tileVal == Hazard.Hole:
+            self.x = 1
+            self.y = 1
+
+        self.alpha = new_alpha
+```
+
+We now need to adapt all occurences of `moveStep` to match the improved definition.
+```python
+class Board():
+
+        def timerEvent(self, event):
+
+        self.robot.followCommand(self.obstacleArray)
+
+        # update visuals
+        self.update()
+
+class BaseRobot():
+
+    def followCommand(self, obstacleArray):
+        direction, distance = self.command
+
+        if distance:
+            self.moveStep(direction, obstacleArray)
+            self.command = (direction, distance - 1)
+```
+This distribution makes way more sense!
+
+# Let's go and bully some robot around!
