@@ -1,0 +1,6 @@
+1. Roboterklasse Modifizieren, so dass jeder Roboter in eigenem Thread arbeitet
+2. Attribute für Roboter:
+   a, a_alpha, a_max, a_alpha_max, v, v_alpha
+3. Vier Roboter instanzieren
+4. getrennt steuern
+5. Server berechnet aus a, a_alpha alles andere (in 30fps?)
