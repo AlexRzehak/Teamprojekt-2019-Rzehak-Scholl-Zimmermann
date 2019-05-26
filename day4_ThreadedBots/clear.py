@@ -1,6 +1,6 @@
-from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow, QRunnable, QObject
+from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow
 from PyQt5.QtGui import QPainter, QColor, QBrush, QPen
-from PyQt5.QtCore import Qt, QPoint, QBasicTimer, QThreadPool, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import Qt, QPoint, QBasicTimer, QThreadPool, QRunnable, QObject, pyqtSignal, pyqtSlot
 import sys
 import math
 import threading
@@ -44,6 +44,7 @@ class Board(QWidget):
 
         self.initObstacles()
         self.initRobots()
+
         self.timer.start(Board.RefreshSpeed, self)
 
     def initObstacles(self):
@@ -56,7 +57,8 @@ class Board(QWidget):
               self.threadpool.maxThreadCount())
 
         robo1 = BaseRobot(TILE_SIZE/2, Movement.straight, 100000, 100000)
-        robo1.placeRobot(0, 300, 90)
+        robo1.placeRobot(1, 1, 90)
+        robo1.setAutoDelete(False)
         robo1.signals.finished.connect(self.robot_finished)
         self.robots.append(robo1)
 
@@ -237,6 +239,7 @@ class BaseRobot(QRunnable):
 
     @pyqtSlot()
     def run(self):
+        print('hi')
         a, a_alpha = self.movement_funct(self)
         self.a = a
         self.a_alpha = a_alpha
