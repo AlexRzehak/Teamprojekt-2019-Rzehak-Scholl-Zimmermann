@@ -47,15 +47,21 @@ class Board(QWidget):
         self.setFocusPolicy(Qt.StrongFocus)
 
         self.initObstacles()
-        self.initRobots(0)
+        self.initRobots()
         self.timer.start(Board.RefreshSpeed, self)
 
     def initObstacles(self):
 
         self.obstacleArray = Board.createExampleArray(Board.TileCount)
 
-    def initRobots(self,i):
-        self.robot = RobotArray[i]
+    def initRobots(self):
+        self.robot = RobotArray[0]
+        BaseRobot.RobotThread(self.robot,1)
+
+        robot2 = RobotArray[1]
+        BaseRobot.RobotThread(robot2,2)
+
+
 
     @staticmethod
     def createExampleArray(size: int):
@@ -233,7 +239,13 @@ class BaseRobot():
         # the current command executed by the robot
         self.command = ('stay', 0)
 
+    def RobotThread(self,i):
+
+        t = threading.Thread(target=self.PrintRobot, kwargs=dict( thread= ("RobotThread" + str(i))))
+        t.start()
+
     def followCommand(self, obstacleArray):
+
         direction, distance = self.command
 
         if distance:
@@ -287,19 +299,6 @@ class BaseRobot():
 
 
 RobotArray = [BaseRobot(10,10,40,0),BaseRobot(20,20,40,90),BaseRobot(30,30,40,180)]
-
-
-
-t1 = threading.Thread(target= BaseRobot.PrintRobot,kwargs= dict(self=RobotArray[0], thread = "thread1" ))
-t1.start()
-
-t2 = threading.Thread(target= BaseRobot.PrintRobot,kwargs= dict(self=RobotArray[1], thread = "thread2"))
-t2.start()
-
-t3 = threading.Thread(target= BaseRobot.PrintRobot,kwargs= dict(self=RobotArray[2], thread = "thread3"))
-t3.start()
-
-
 
 
 if __name__ == '__main__':
