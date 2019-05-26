@@ -1,8 +1,10 @@
-from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow
+from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow, QRunnable, QObject
 from PyQt5.QtGui import QPainter, QColor, QBrush, QPen
-from PyQt5.QtCore import Qt, QPoint, QBasicTimer
+from PyQt5.QtCore import Qt, QPoint, QBasicTimer, QThreadPool, pyqtSignal, pyqtSlot
 import sys
 import math
+import threading
+import time
 
 FIELD_SIZE = 1000
 TILE_SIZE = 10
@@ -28,29 +30,38 @@ class Game(QMainWindow):
 
 
 class Board(QWidget):
-    """Task 1: This class represents the game board."""
 
     TileCount = int(FIELD_SIZE / TILE_SIZE)
-    RefreshSpeed = 150
+    RefreshSpeed = 33
 
     def __init__(self, parent):
         super().__init__(parent)
 
         self.obstacleArray = [[0] * Board.TileCount
                               for row in range(Board.TileCount)]
-        self.robot = None
+        self.robots = []
         self.timer = QBasicTimer()
 
-        # Recognize input froum mouse and keyboard.
-        self.setFocusPolicy(Qt.StrongFocus)
-
-        self.initBoardState()
+        self.initObstacles()
+        self.initRobots()
         self.timer.start(Board.RefreshSpeed, self)
 
-    def initBoardState(self):
+    def initObstacles(self):
 
         self.obstacleArray = Board.createExampleArray(Board.TileCount)
-        self.robot = BaseRobot.createExampleRobot(Board.TileCount, TILE_SIZE)
+
+    def initRobots(self):
+        self.threadpool = QThreadPool()
+        print("Multithreading with maximum %d threads" %
+              self.threadpool.maxThreadCount())
+
+        robo1 = BaseRobot(TILE_SIZE/2, Movement.straight, 100000, 100000)
+        robo1.placeRobot(0, 300, 90)
+        robo1.signals.finished.connect(self.robot_finished)
+        self.robots.append(robo1)
+
+    def robot_finished(self):
+        print('Calculations finished.')
 
     @staticmethod
     def createExampleArray(size: int):
@@ -80,11 +91,11 @@ class Board(QWidget):
         qp.begin(self)
         self.drawBoard(qp)
         self.drawObstacles(qp)
-        self.drawRobot(qp)
+        for robot in self.robots:
+            self.drawRobot(qp, robot)
         qp.end()
 
     def drawBoard(self, qp):
-        """"Task 2: Draw the board and its tiles."""
 
         # painting a grid to showcase the tiles
         # using the constants TILE_SIZE and FIELD_SIZE to determine the size
@@ -99,7 +110,7 @@ class Board(QWidget):
             qp.drawLine(vertical, 0, vertical, FIELD_SIZE)
 
     def drawObstacles(self, qp):
-        """Task 3: Paint the different hazards given by obstacleArray."""
+
         for xpos in range(Board.TileCount):
             for ypos in range(Board.TileCount):
 
@@ -127,10 +138,7 @@ class Board(QWidget):
                                     ypos * TILE_SIZE + 0.5 * TILE_SIZE)
                     qp.drawEllipse(center, 0.5 * TILE_SIZE, 0.25 * TILE_SIZE)
 
-    def drawRobot(self, qp):
-        """Task 5: Paint the robot on the board. Mind its direction."""
-
-        rb = self.robot
+    def drawRobot(self, qp, rb):
 
         # setting circle color and transparency
         qp.setBrush(QColor(133, 242, 252, 100))
@@ -155,50 +163,19 @@ class Board(QWidget):
         # drawing small circle
         qp.drawEllipse(center, 2, 2)
 
-    def timerEvent(self, event):
-        """Task 6: A timer moving the Robot step by step
-         while follwing its current command.
-        """
+    # TODO
+    def calculate_robot(self, robot):
+        pass
 
-        self.robot.followCommand(self.obstacleArray)
+    def timerEvent(self, event):
+
+        for robot in self.robots:
+            # create proper connection:
+            # thread should wait until server sends data, then start calc
+            self.calculate_robot(robot)
+            self.threadpool.start(robot)
 
         # update visuals
-        self.update()
-
-    def mousePressEvent(self, event):
-        mouseX = int((event.x()) / TILE_SIZE)
-        mouseY = int((event.y()) / TILE_SIZE)
-        dx = self.robot.x - mouseX
-        dy = self.robot.y - mouseY
-
-        if abs(dx) > abs(dy):
-            if dx > 0:
-                self.robot.command = ('west', abs(dx))
-            else:
-                self.robot.command = ('east', abs(dx))
-        else:
-            if dy > 0:
-                self.robot.command = ('north', abs(dy))
-            else:
-                self.robot.command = ('south', abs(dy))
-
-    # TODO this should not exist.
-    def keyPressEvent(self, event):
-
-        key = event.key()
-
-        if key == Qt.Key_Left:
-            self.robot.moveStep('west', self.obstacleArray)
-
-        elif key == Qt.Key_Right:
-            self.robot.moveStep('east', self.obstacleArray)
-
-        elif key == Qt.Key_Up:
-            self.robot.moveStep('north', self.obstacleArray)
-
-        elif key == Qt.Key_Down:
-            self.robot.moveStep('south', self.obstacleArray)
-
         self.update()
 
 
@@ -212,63 +189,65 @@ class Hazard():
     Hole = 3
 
 
-class BaseRobot():
-    """Task 4: A class representing a robot with positioning parameters.
-     We added some control logic.
-    """
+class RobotSignals(QObject):
 
-    def __init__(self, x, y, radius, alpha):
+    # TODO Something
+    finished = pyqtSignal()
 
-        self.x = x
-        self.y = y
-        self.radius = radius
-        self.alpha = alpha
 
-        # the current command executed by the robot
-        self.command = ('stay', 0)
-
-    def followCommand(self, obstacleArray):
-        direction, distance = self.command
-
-        if distance:
-            self.moveStep(direction, obstacleArray)
-            self.command = (direction, distance - 1)
-
-    def moveStep(self, direction: str, obstacleArray):
-
-        directions = dict(north=(0, -1, 0),
-                          south=(0, 1, 180),
-                          east=(1, 0, 90),
-                          west=(-1, 0, 270))
-
-        x_add, y_add, new_alpha = directions[direction]
-        new_x, new_y = self.x + x_add, self.y + y_add
-
-        # robot will do the pacman
-        new_x, new_y = new_x % Board.TileCount, new_y % Board.TileCount
-
-        tileVal = obstacleArray[new_x][new_y]
-
-        if tileVal == Hazard.Empty:
-            self.x = new_x
-            self.y = new_y
-
-        elif tileVal == Hazard.Wall:
-            pass
-
-        elif tileVal == Hazard.Border:
-            pass
-
-        elif tileVal == Hazard.Hole:
-            self.x = 1
-            self.y = 1
-
-        self.alpha = new_alpha
+class Movement():
 
     @staticmethod
-    def createExampleRobot(boardSize: int, tileSize: int):
+    def straight(robot):
+        if robot.x < FIELD_SIZE/2:
+            return (10, 0)
+        else:
+            return (-10, 0)
 
-        return BaseRobot(1, 1, tileSize/2, 45)
+
+class BaseRobot(QRunnable):
+
+    def __init__(self, radius, movement_funct, a_max, a_alpha_max):
+        super().__init__()
+
+        # set parameters
+        self.radius = radius
+
+        self.a_max = a_max
+        self.a_alpha_max = a_alpha_max
+
+        # current position
+        self.x = 0
+        self.y = 0
+        self.alpha = 0
+
+        self.v = 0
+        self.v_alpha = 0
+
+        # calculated by the robot
+        self.a = 0
+        self.a_alpha = 0
+
+        # # the current command executed by the robot
+        # self.command = ('stay', 0)
+        self.signals = RobotSignals()
+
+        # Movement function to apply on current position and speed.
+        self.movement_funct = movement_funct
+
+    @pyqtSlot()
+    def run(self):
+        a, a_alpha = self.movement_funct(self)
+        self.a = a
+        self.a_alpha = a_alpha
+
+        # here is no exception handling
+        self.signals.finished.emit()
+
+    def placeRobot(self, x, y, alpha):
+        self.x = x
+        self.y = y
+        self.alpha = alpha
 
 
 if __name__ == '__main__':
