@@ -58,7 +58,7 @@ class Board(QWidget):
         robo1.receive_sensor_data((15, 15, 90, 0, 0))
         self.robots.append(robo1)
 
-        robo2 = BaseRobot(TILE_SIZE, Movement.circle_movement, 10000, 10000)
+        robo2 = BaseRobot(TILE_SIZE, Movement.random_movement, 10000, 10000)
         Board.place_robot(robo2, 900, 800, 0)
         robo2.receive_sensor_data((900, 800, 0, 0, 0))
         self.robots.append(robo2)
@@ -179,8 +179,9 @@ class Board(QWidget):
         # TODO return sensor data to be sent to the robot: (x, y, angle, v, v_angle)
         # TODO (optional) maybe prohibit robot from leaving the battlefield
         # TODO (much optional) some time implement collision management
-        print(self)
-        print(poll)
+        #print(self)
+        #print(poll)
+
         a = poll[0]
         a_alpha = poll[1]
 
@@ -238,12 +239,17 @@ class Movement():
     @staticmethod
     def random_movement(sensor_data, **kwargs):
         # TODO
-
+        if sensor_data[3] < 8:
+            a = 1
+            a_alpha = random.randint(-10,10)
+        else:
+            a = 0
+            a_alpha = random.randint(-25,25)
         return a, a_alpha
 
     @staticmethod
     def nussschnecke_movement(sensor_data, **kwargs):
-        if sensor_data[3] < 30:
+        if sensor_data[3] < 20:
             a = 0.5
             a_alpha = 10
             return  a,a_alpha
