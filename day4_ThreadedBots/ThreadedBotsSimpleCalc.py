@@ -63,9 +63,9 @@ class Board(QWidget):
         robo2.receive_sensor_data((900, 800, 0, 0, 0))
         self.robots.append(robo2)
 
-        robo3 = BaseRobot(TILE_SIZE*2, Movement.random_movement, 10000, 10000)
-        Board.place_robot(robo3, 120, 300, 240)
-        robo3.receive_sensor_data((120, 300, 240, 0, 0))
+        robo3 = BaseRobot(TILE_SIZE*2, Movement.nussschnecke_movement, 10000, 10000)
+        Board.place_robot(robo3, 500, 500, 240)
+        robo3.receive_sensor_data((500, 500, 240, 0, 0))
         self.robots.append(robo3)
 
     @staticmethod
@@ -188,8 +188,8 @@ class Board(QWidget):
         new_v_alpha = robot.v_alpha + a_alpha
         new_alpha = robot.alpha + new_v_alpha
         radian = ((new_alpha - 90) / 180 * math.pi)
-        new_x = robot.x + new_v * math.cos(radian)
-        new_y = robot.y + new_v * math.sin(radian)
+        new_x = (robot.x + new_v * math.cos(radian))
+        new_y = (robot.y + new_v * math.sin(radian))
 
         robot.v = new_v
         Board.place_robot(robot, new_x, new_y, new_alpha)
@@ -238,10 +238,19 @@ class Movement():
     @staticmethod
     def random_movement(sensor_data, **kwargs):
         # TODO
-        a = random.randint(-100, 100)
-        b = random.randint(-100, 100)
-        return a, b
 
+        return a, a_alpha
+
+    @staticmethod
+    def nussschnecke_movement(sensor_data, **kwargs):
+        if sensor_data[3] < 30:
+            a = 0.5
+            a_alpha = 10
+            return  a,a_alpha
+        else:
+            a = 0
+            a_alpha = 10
+        return a,a_alpha
 
 class BaseRobot():
 
