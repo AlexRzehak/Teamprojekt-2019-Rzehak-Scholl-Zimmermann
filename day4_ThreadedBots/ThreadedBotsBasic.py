@@ -9,7 +9,6 @@ from PyQt5.QtCore import Qt, QPoint, QBasicTimer
 from PyQt5.QtGui import QPainter, QColor, QBrush, QPen
 from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow
 
-
 FIELD_SIZE = 1000
 TILE_SIZE = 10
 
@@ -22,7 +21,6 @@ class Game(QMainWindow):
         self.initUI()
 
     def initUI(self):
-
         self.board = Board(self)
         self.setCentralWidget(self.board)
 
@@ -34,7 +32,6 @@ class Game(QMainWindow):
 
 
 class Board(QWidget):
-
     TileCount = int(FIELD_SIZE / TILE_SIZE)
     RefreshSpeed = 40
 
@@ -53,20 +50,25 @@ class Board(QWidget):
         self.timer.start(Board.RefreshSpeed, self)
 
     def create_example_robots(self):
-        robo1 = BaseRobot(TILE_SIZE, Movement.random_movement, 100, 100)
-        Board.place_robot(robo1, 15, 15, 90)
-        robo1.receive_sensor_data((15, 15, 90, 0, 0))
+        robo1 = BaseRobot(TILE_SIZE, Movement.random_movement, 1000, 1000)
+        Board.place_robot(robo1, 400, 400, 90)
+        robo1.receive_sensor_data((400, 400, 90, 0, 0))
         self.robots.append(robo1)
 
-        robo2 = BaseRobot(TILE_SIZE*5, Movement.spin_movement, 100, 0.2)
+        robo2 = BaseRobot(TILE_SIZE * 5, Movement.spin_movement, 100, 0.2)
         Board.place_robot(robo2, 900, 800, 0)
         robo2.receive_sensor_data((900, 800, 0, 0, 0))
         self.robots.append(robo2)
 
-        robo3 = BaseRobot(TILE_SIZE*2, Movement.nussschnecke_movement, 100, 100)
+        robo3 = BaseRobot(TILE_SIZE * 2, Movement.nussschnecke_movement, 100, 100)
         Board.place_robot(robo3, 500, 500, 240)
         robo3.receive_sensor_data((500, 500, 240, 0, 0))
         self.robots.append(robo3)
+
+        robo4 = BaseRobot(TILE_SIZE * 2, Movement.nussschnecke_movement, 100, 100)
+        Board.place_robot(robo4, 600, 500, 240)
+        robo4.receive_sensor_data((600, 500, 240, 0, 0))
+        self.robots.append(robo4)
 
     @staticmethod
     def createExampleArray(size: int):
@@ -179,42 +181,52 @@ class Board(QWidget):
         # TODO return sensor data to be sent to the robot: (x, y, angle, v, v_angle)
         # TODO (optional) maybe prohibit robot from leaving the battlefield
         # TODO (much optional) some time implement collision management
-        #print(self)
-        #print(poll)
 
+        # checks if acceleration is valid
         a = poll[0]
         if a > robot.a_max:
             a = robot.a_max
+        # checks if angle acceleration is valid
         a_alpha = poll[1]
         if a_alpha > robot.a_alpha_max:
             a_alpha = robot.a_alpha_max
 
+        # calculates new values
         new_v = robot.v + a
         new_v_alpha = robot.v_alpha + a_alpha
         new_alpha = robot.alpha + new_v_alpha
         radian = ((new_alpha - 90) / 180 * math.pi)
 
+        # calculates x coordinate, only allows values inside walls
         new_x = (robot.x + new_v * math.cos(radian))
         if new_x < TILE_SIZE:
-            new_x= TILE_SIZE
+            new_x = TILE_SIZE
+            new_v = 0
         if new_x > 99 * TILE_SIZE:
             new_x = 99 * TILE_SIZE
+            new_v = 0
         else:
             new_x = new_x
 
+        # calculates y coordinate, only allows values inside walls
+        # wall collisions set the velocity to 0
         new_y = (robot.y + new_v * math.sin(radian))
         if new_y < TILE_SIZE:
             new_y = TILE_SIZE
+            new_v = 0
         if new_y > 99 * TILE_SIZE:
             new_y = 99 * TILE_SIZE
+            new_v = 0
         else:
             new_y = new_y
 
+        # sets new values for the robot
         robot.v = new_v
         robot.v_alpha = new_v_alpha
+        # places the robot on the board
         Board.place_robot(robot, new_x, new_y, new_alpha)
+        # sends tuple to be used as "sensor_date"
         return (new_x, new_y, new_alpha, new_v, new_v_alpha)
-
 
     def timerEvent(self, event):
 
@@ -258,12 +270,12 @@ class Movement():
     @staticmethod
     def random_movement(sensor_data, **kwargs):
         # TODO
-        if sensor_data[3] < 30:
+        if sensor_data[3] < 15:
             a = 1
-            a_alpha = random.randint(-30,30)
+            a_alpha = random.randint(-10, 10)
         else:
             a = 0
-            a_alpha = random.randint(-30,30)
+            a_alpha = random.randint(-10, 10)
         return a, a_alpha
 
     @staticmethod
@@ -271,11 +283,11 @@ class Movement():
         if sensor_data[3] < 20:
             a = 1
             a_alpha = 1
-            return  a,a_alpha
+            return a, a_alpha
         else:
             a = 0
             a_alpha = 0
-        return a,a_alpha
+        return a, a_alpha
 
     @staticmethod
     def spin_movement(sensor_data, **kwargs):
@@ -285,13 +297,13 @@ class Movement():
         if sensor_data[4] > 30:
             a = 0
             a_alpha = 0
-        return a,a_alpha
+        return a, a_alpha
 
     @staticmethod
     def unchanged_movement(sensor_data, **kwargs):
         a = 0
         a_alpha = 0
-        return a,a_alpha
+        return a, a_alpha
 
 
 class BaseRobot():
@@ -353,6 +365,7 @@ class BaseRobot():
                           # might be wrong lel
                           a=self.a,
                           a_alpha=self.a_alpha)
+
             self.a, self.a_alpha = self.movement_funct(signal, **kwargs)
 
     # def moveStep(self, direction: str, obstacleArray):
