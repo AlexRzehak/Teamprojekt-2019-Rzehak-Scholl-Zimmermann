@@ -60,9 +60,9 @@ class Board(QWidget):
         robo2.receive_sensor_data((900, 800, 0, 0, 0))
         self.robots.append(robo2)
 
-        robo3 = BaseRobot(TILE_SIZE * 2, Movement.nussschnecke_movement, 100, 100)
-        Board.place_robot(robo3, 500, 500, 240)
-        robo3.receive_sensor_data((500, 500, 240, 0, 0))
+        robo3 = BaseRobot(TILE_SIZE * 2, Movement.spiral_movement, 100, 100)
+        Board.place_robot(robo3, 200, 150, 240)
+        robo3.receive_sensor_data((200, 150, 240, 0, 0))
         self.robots.append(robo3)
 
         robo4 = BaseRobot(TILE_SIZE * 2, Movement.nussschnecke_movement, 100, 100)
@@ -198,25 +198,30 @@ class Board(QWidget):
         radian = ((new_alpha - 90) / 180 * math.pi)
 
         # calculates x coordinate, only allows values inside walls
+        # wall collisions set the velocity, angle velocity to 0
         new_x = (robot.x + new_v * math.cos(radian))
         if new_x < TILE_SIZE:
             new_x = TILE_SIZE
-            new_v = 0
+            #new_v = 0
+            #new_v_alpha = 0
         if new_x > 99 * TILE_SIZE:
             new_x = 99 * TILE_SIZE
-            new_v = 0
+            #new_v = 0
+            #new_v_alpha = 0
         else:
             new_x = new_x
 
         # calculates y coordinate, only allows values inside walls
-        # wall collisions set the velocity to 0
+        # wall collisions set the velocity, angle velocity to 0
         new_y = (robot.y + new_v * math.sin(radian))
         if new_y < TILE_SIZE:
             new_y = TILE_SIZE
-            new_v = 0
+            #new_v = 0
+            #new_v_alpha = 0
         if new_y > 99 * TILE_SIZE:
             new_y = 99 * TILE_SIZE
-            new_v = 0
+            #new_v = 0
+            #new_v_alpha = 0
         else:
             new_y = new_y
 
@@ -272,22 +277,33 @@ class Movement():
         # TODO
         if sensor_data[3] < 15:
             a = 1
-            a_alpha = random.randint(-10, 10)
+            a_alpha = random.randint(-20, 20)
         else:
             a = 0
-            a_alpha = random.randint(-10, 10)
+            a_alpha = random.randint(-20, 20)
         return a, a_alpha
 
     @staticmethod
     def nussschnecke_movement(sensor_data, **kwargs):
-        if sensor_data[3] < 20:
-            a = 1
+        if sensor_data[3] < 7:
+            a = 0.5
             a_alpha = 1
             return a, a_alpha
         else:
             a = 0
             a_alpha = 0
         return a, a_alpha
+
+    def spiral_movement(sensor_data, **kwargs):
+        if sensor_data[3] < 20:
+            a = 1
+            a_alpha = 1
+            return a, a_alpha
+        else:
+            a = 1
+            a_alpha = 0
+        return a, a_alpha
+
 
     @staticmethod
     def spin_movement(sensor_data, **kwargs):
