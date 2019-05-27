@@ -36,7 +36,7 @@ class Game(QMainWindow):
 class Board(QWidget):
 
     TileCount = int(FIELD_SIZE / TILE_SIZE)
-    RefreshSpeed = 33
+    RefreshSpeed = 20
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -53,17 +53,17 @@ class Board(QWidget):
         self.timer.start(Board.RefreshSpeed, self)
 
     def create_example_robots(self):
-        robo1 = BaseRobot(TILE_SIZE/2, Movement.static_movement, 10000, 10000)
+        robo1 = BaseRobot(TILE_SIZE/2, Movement.random_movement, 100, 100)
         Board.place_robot(robo1, 15, 15, 90)
         robo1.receive_sensor_data((15, 15, 90, 0, 0))
         self.robots.append(robo1)
 
-        robo2 = BaseRobot(TILE_SIZE, Movement.random_movement, 10000, 10000)
+        robo2 = BaseRobot(TILE_SIZE, Movement.spin_movement, 100, 0.2)
         Board.place_robot(robo2, 900, 800, 0)
         robo2.receive_sensor_data((900, 800, 0, 0, 0))
         self.robots.append(robo2)
 
-        robo3 = BaseRobot(TILE_SIZE*2, Movement.nussschnecke_movement, 10000, 10000)
+        robo3 = BaseRobot(TILE_SIZE*2, Movement.nussschnecke_movement, 100, 100)
         Board.place_robot(robo3, 500, 500, 240)
         robo3.receive_sensor_data((500, 500, 240, 0, 0))
         self.robots.append(robo3)
@@ -183,7 +183,11 @@ class Board(QWidget):
         #print(poll)
 
         a = poll[0]
+        if a > robot.a_max:
+            a = robot.a_max
         a_alpha = poll[1]
+        if a_alpha > robot.a_alpha_max:
+            a_alpha = robot.a_alpha_max
 
         new_v = robot.v + a
         new_v_alpha = robot.v_alpha + a_alpha
@@ -193,6 +197,7 @@ class Board(QWidget):
         new_y = (robot.y + new_v * math.sin(radian))
 
         robot.v = new_v
+        robot.v_alpha = new_v_alpha
         Board.place_robot(robot, new_x, new_y, new_alpha)
         return (new_x, new_y, new_alpha, new_v, new_v_alpha)
 
@@ -244,19 +249,32 @@ class Movement():
             a_alpha = random.randint(-10,10)
         else:
             a = 0
-            a_alpha = random.randint(-25,25)
+            a_alpha = random.randint(-10,10)
         return a, a_alpha
 
     @staticmethod
     def nussschnecke_movement(sensor_data, **kwargs):
-        if sensor_data[3] < 20:
-            a = 0.5
-            a_alpha = 10
+        if sensor_data[3] < 5:
+            a = 1
+            a_alpha = 1
             return  a,a_alpha
         else:
             a = 0
-            a_alpha = 10
+            a_alpha = 0
         return a,a_alpha
+
+    @staticmethod
+    def spin_movement(sensor_data, **kwargs):
+        a = 0
+        a_alpha = 99999999
+        return a,a_alpha
+
+    @staticmethod
+    def unchanged_movement(sensor_data, **kwargs):
+        a = 0
+        a_alpha = 0
+        return a,a_alpha
+
 
 class BaseRobot():
 
