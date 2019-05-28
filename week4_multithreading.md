@@ -450,7 +450,6 @@ class Movement:
 
     @staticmethod
     def spin_movement(sensor_data, **kwargs):
-
         a = 0
         a_alpha = 99999999
         if sensor_data[4] > 30:
