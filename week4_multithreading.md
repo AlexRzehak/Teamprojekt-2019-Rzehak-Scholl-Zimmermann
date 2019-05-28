@@ -466,6 +466,28 @@ class Movement:
 The movement function of a robot determines if or how much the robot accelerates and how much the its alpha should change.
 These values get set based on the data that the robot receives and are used as poll data when calculating the resulting changes.
 ## Additional Features:
-# MAYBE TODO (Leander)
+### Collision Detection
+```
+ def check_collision(self, robot, robot_x, robot_y, tile_x, tile_y):
+        # calc the coordinates of the given tile
+        tile_left = tile_x * TILE_SIZE
+        tile_upper = tile_y * TILE_SIZE
+
+        # calc the closest point in the rectangle to the robot
+        closest_point_x = self.limit(robot_x, tile_left, tile_left + TILE_SIZE)
+        closest_point_y = self.limit(robot_y, tile_upper, tile_upper + TILE_SIZE)
+
+        # calc the x and y distance from the closest point to the center of the robot
+        dx = abs(closest_point_x - robot_x)
+        dy = abs(closest_point_y - robot_y)
+        # calc the actual distance
+        distance = math.sqrt(dx**2 + dy**2)
+
+        # return if collision
+        if distance > robot.radius:
+            return 0
+        else:
+            return robot.radius - distance
+```
 
 # Help! The robots are becoming independent!
