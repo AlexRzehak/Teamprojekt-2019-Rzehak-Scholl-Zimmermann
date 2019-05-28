@@ -50,6 +50,9 @@ class Board(QWidget):
         self.timer.start(Board.RefreshSpeed, self)
 
     def create_example_robots(self):
+        """Task 3: Initialize four different robots
+        and place them on the battlefield.
+        """
         robo1 = BaseRobot(TILE_SIZE, Movement.random_movement, 1000, 1000)
         Board.place_robot(robo1, 400, 400, 90)
         robo1.receive_sensor_data((400, 400, 90, 0, 0))
@@ -65,7 +68,8 @@ class Board(QWidget):
         robo3.receive_sensor_data((200, 150, 240, 0, 0))
         self.robots.append(robo3)
 
-        robo4 = BaseRobot(TILE_SIZE * 2, Movement.nussschnecke_movement, 100, 100)
+        robo4 = BaseRobot(TILE_SIZE * 2,
+                          Movement.nussschnecke_movement, 100, 100)
         Board.place_robot(robo4, 600, 500, 240)
         robo4.receive_sensor_data((600, 500, 240, 0, 0))
         self.robots.append(robo4)
@@ -176,10 +180,7 @@ class Board(QWidget):
         polled from the robot to calculate new position values and create new
         sensor input.
         """
-        # TODO use place robot to place robot
-        # TODO also place speed values
-        # TODO return sensor data to be sent to the robot: (x, y, angle, v, v_angle)
-        # TODO (optional) maybe prohibit robot from leaving the battlefield
+
         # TODO (much optional) some time implement collision management
 
         # checks if acceleration is valid
@@ -224,6 +225,9 @@ class Board(QWidget):
         return (new_x, new_y, new_alpha, new_v, new_v_alpha)
 
     def timerEvent(self, event):
+        """Task 5: The Server will ask each robot about its parameters
+        and re-calculate the board state.
+        """
 
         for robot in self.robots:
             poll = robot.send_action_data()
@@ -251,20 +255,10 @@ class Hazard():
 
 
 class Movement():
-
-    @staticmethod
-    def static_movement(sensor_data, **kwargs):
-        # TODO
-        return kwargs['a'], kwargs['a_alpha']
-
-    @staticmethod
-    def circle_movement(sensor_data, **kwargs):
-        # TODO
-        return kwargs['a'], kwargs['a_alpha']
+    """Implement different movement options."""
 
     @staticmethod
     def random_movement(sensor_data, **kwargs):
-        # TODO
         if sensor_data[3] < 15:
             a = 1
             a_alpha = random.randint(-20, 20)
@@ -284,6 +278,7 @@ class Movement():
             a_alpha = 0
         return a, a_alpha
 
+    @staticmethod
     def spiral_movement(sensor_data, **kwargs):
         if sensor_data[3] < 20:
             a = 1
@@ -293,7 +288,6 @@ class Movement():
             a = 1
             a_alpha = 0
         return a, a_alpha
-
 
     @staticmethod
     def spin_movement(sensor_data, **kwargs):
@@ -313,6 +307,7 @@ class Movement():
 
 
 class BaseRobot():
+    """Task 2: The BaseRobot class now has the attributes needed."""
 
     def __init__(self, radius, movement_funct, a_max, a_alpha_max):
 
@@ -346,6 +341,8 @@ class BaseRobot():
         self._sensor_queue = queue.Queue()
 
     def run(self):
+        """Task 1: Every robot will now perform calculations in its own thread."""
+
         self.thread = threading.Thread(
             target=self._thread_action, args=(self._sensor_queue,))
         self.thread.daemon = True
@@ -358,6 +355,7 @@ class BaseRobot():
         self._sensor_queue.put(data)
 
     def _thread_action(self, q):
+        """Task 4: The robot will change a and a_alpha within its thread"""
 
         while True:
             # get() blocks the thread until queue is not empty anymore
