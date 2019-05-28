@@ -467,8 +467,8 @@ The movement function of a robot determines if or how much the robot accelerates
 These values get set based on the data that the robot receives and are used as poll data when calculating the resulting changes.
 ## Additional Features:
 ### Collision Detection
-```
- def check_collision(self, robot, robot_x, robot_y, tile_x, tile_y):
+```python
+    def check_collision(self, robot, robot_x, robot_y, tile_x, tile_y):
         # calc the coordinates of the given tile
         tile_left = tile_x * TILE_SIZE
         tile_upper = tile_y * TILE_SIZE
@@ -484,10 +484,67 @@ These values get set based on the data that the robot receives and are used as p
         distance = math.sqrt(dx**2 + dy**2)
 
         # return if collision
+        return distance < robot.radius
+```
+
+![visualisation of collision](collision.png)<br/>
+
+## Problem:
+### Reacting to a detected collision
+
+## Simple Solution:
+### dont move at all for one step
+
+```python
+        for tile_x in range(Board.TileCount):
+            for tile_y in range(Board.TileCount):
+                if self.obstacleArray[tile_x][tile_y] != 0:
+                    if self.check_collision(robot, new_x, new_y, tile_x, tile_y):
+                        new_x = robot.x
+                        new_y = robot.y
+```
+
+## Alternative:
+### 'go back' as far as it overlaps
+
+```python
         if distance > robot.radius:
             return 0
         else:
             return robot.radius - distance
+
+```
+```python
+        current_max_overlap = 0
+        for tile_x in range(Board.TileCount):
+            for tile_y in range(Board.TileCount):
+                if self.obstacleArray[tile_x][tile_y] != 0:
+                    overlap = self.check_collision(robot, new_x, new_y, tile_x, tile_y)
+                    if overlap > current_max_overlap:
+                        current_max_overlap = overlap
+
+        # if there is a collision adjust new_v and recalc new_x, new_y
+        if current_max_overlap:
+            new_v = new_v - current_max_overlap
+            new_x = (robot.x + new_v * math.cos(radian_alpha))
+            new_y = (robot.y + new_v * math.sin(radian_alpha))
+```
+## The Hard Way:
+### Check for collisions with the new x and the new y seperatley
+```python
+        if distance < robot.radius:
+            x_overlap = robot_x + ((closest_point_x - robot_x) / dist_rad_ratio) - closest_point_x
+            y_overlap = robot_y + ((closest_point_y - robot_y) / dist_rad_ratio) - closest_point_y
+            return x_overlap, y_overlap
+        else:
+            return 0, 0
+```
+```python
+        if x_current_max_overlap:
+            new_x = new_x - x_current_max_overlap
+
+        if y_current_max_overlap:
+            new_y = new_y - y_current_max_overlap
 ```
 
 # Help! The robots are becoming independent!
