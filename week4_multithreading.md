@@ -380,11 +380,93 @@ class Board(QWidget):
 ### Make the Robots move!
 
 ## Implement the `calculate_robot` function.
-# TODO (Tim)
+```python
+        # checks if acceleration is valid
+        a = poll[0]
+        if a > robot.a_max:
+            a = robot.a_max
+        # checks if angle acceleration is valid
+        a_alpha = poll[1]
+        if a_alpha > robot.a_alpha_max:
+            a_alpha = robot.a_alpha_max
 
+        # calculates new values
+        new_v = robot.v + a
+        new_v_alpha = robot.v_alpha + a_alpha
+        new_alpha = robot.alpha + new_v_alpha
+        radian_alpha = ((new_alpha - 90) / 180 * math.pi)
+
+        # calculates x coordinate, only allows values inside walls
+        new_x = (robot.x + new_v * math.cos(radian_alpha))
+
+        # calculates y coordinate, only allows values inside walls
+        new_y = (robot.y + new_v * math.sin(radian_alpha))
+```
+With the "a" and "a_alpha" values received from each poll we can calculate the information needed to place the robot correctly, set its velocity, angle velocity and send the robot data about its self.
+```python
+        # sets new values for the robot
+        robot.v = new_v
+        robot.v_alpha = new_v_alpha
+        # places the robot on the board
+        Board.place_robot(robot, new_x, new_y, new_alpha)
+        # sends tuple to be used as "sensor_date"
+        return new_x, new_y, new_alpha, new_v, new_v_alpha
+```
 ## Let's implement some movement functions!
-# TODO (Tim)
+```python
+class Movement:
 
+    @staticmethod
+    def random_movement(sensor_data, **kwargs):
+        # TODO
+        if sensor_data[3] < 15:
+            a = 1
+            a_alpha = random.randint(-20, 20)
+        else:
+            a = 0
+            a_alpha = random.randint(-20, 20)
+        return a, a_alpha
+
+    @staticmethod
+    def nussschnecke_movement(sensor_data, **kwargs):
+        if sensor_data[3] < 7:
+            a = 0.5
+            a_alpha = 1
+            return a, a_alpha
+        else:
+            a = 0
+            a_alpha = 0
+        return a, a_alpha
+
+    def spiral_movement(sensor_data, **kwargs):
+        if sensor_data[3] < 20:
+            a = 1
+            a_alpha = 1
+            return a, a_alpha
+        else:
+            a = 1
+            a_alpha = 0
+        return a, a_alpha
+
+
+    @staticmethod
+    def spin_movement(sensor_data, **kwargs):
+
+        a = 0
+        a_alpha = 99999999
+        if sensor_data[4] > 30:
+            a = 0
+            a_alpha = 0
+        return a, a_alpha
+
+    @staticmethod
+    def unchanged_movement(sensor_data, **kwargs):
+        a = 0
+        a_alpha = 0
+        return a, a_alpha
+```
+The movement function of a robot determines if or how much the robot accelerates and how much the its alpha should change.
+These values get set based on the data that the robot receives and are used as poll data when calculating the resulting changes.
 ## Additional Features:
 # MAYBE TODO (Leander)
 
