@@ -198,30 +198,20 @@ class Board(QWidget):
         radian = ((new_alpha - 90) / 180 * math.pi)
 
         # calculates x coordinate, only allows values inside walls
-        # wall collisions set the velocity, angle velocity to 0
         new_x = (robot.x + new_v * math.cos(radian))
         if new_x < TILE_SIZE:
             new_x = TILE_SIZE
-            #new_v = 0
-            #new_v_alpha = 0
         if new_x > 99 * TILE_SIZE:
             new_x = 99 * TILE_SIZE
-            #new_v = 0
-            #new_v_alpha = 0
         else:
             new_x = new_x
 
         # calculates y coordinate, only allows values inside walls
-        # wall collisions set the velocity, angle velocity to 0
         new_y = (robot.y + new_v * math.sin(radian))
         if new_y < TILE_SIZE:
             new_y = TILE_SIZE
-            #new_v = 0
-            #new_v_alpha = 0
         if new_y > 99 * TILE_SIZE:
             new_y = 99 * TILE_SIZE
-            #new_v = 0
-            #new_v_alpha = 0
         else:
             new_y = new_y
 
@@ -383,37 +373,6 @@ class BaseRobot():
                           a_alpha=self.a_alpha)
 
             self.a, self.a_alpha = self.movement_funct(signal, **kwargs)
-
-    # def moveStep(self, direction: str, obstacleArray):
-
-    #     directions = dict(north=(0, -1, 0),
-    #                       south=(0, 1, 180),
-    #                       east=(1, 0, 90),
-    #                       west=(-1, 0, 270))
-
-    #     x_add, y_add, new_alpha = directions[direction]
-    #     new_x, new_y = self.x + x_add, self.y + y_add
-
-    #     # robot will do the pacman
-    #     new_x, new_y = new_x % Board.TileCount, new_y % Board.TileCount
-
-    #     tileVal = obstacleArray[new_x][new_y]
-
-    #     if tileVal == Hazard.Empty:
-    #         self.x = new_x
-    #         self.y = new_y
-
-    #     elif tileVal == Hazard.Wall:
-    #         pass
-
-    #     elif tileVal == Hazard.Border:
-    #         pass
-
-    #     elif tileVal == Hazard.Hole:
-    #         self.x = 1
-    #         self.y = 1
-
-    #     self.alpha = new_alpha
 
 
 if __name__ == '__main__':
