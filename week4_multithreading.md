@@ -493,7 +493,7 @@ These values get set based on the data that the robot receives and are used as p
 ### Reacting to a detected collision
 
 ## Simple Solution:
-### dont move at all for one step
+### Don't move at all for one step
 
 ```python
         for tile_x in range(Board.TileCount):
@@ -505,7 +505,7 @@ These values get set based on the data that the robot receives and are used as p
 ```
 
 ## Alternative:
-### 'go back' as far as it overlaps
+### 'Go back' as far as it overlaps
 
 ```python
         if distance > robot.radius:
@@ -532,6 +532,8 @@ These values get set based on the data that the robot receives and are used as p
 ## The Hard Way:
 ### Check for collisions with the new x and the new y seperatley
 ```python
+        dist_rad_ratio = robot.radius/distance
+        
         if distance < robot.radius:
             x_overlap = robot_x + ((closest_point_x - robot_x) / dist_rad_ratio) - closest_point_x
             y_overlap = robot_y + ((closest_point_y - robot_y) / dist_rad_ratio) - closest_point_y
