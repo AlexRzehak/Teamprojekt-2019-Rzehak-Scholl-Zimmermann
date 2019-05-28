@@ -33,7 +33,7 @@ class Game(QMainWindow):
 
 class Board(QWidget):
     TileCount = int(FIELD_SIZE / TILE_SIZE)
-    RefreshSpeed = 40
+    RefreshSpeed = 100
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -85,10 +85,8 @@ class Board(QWidget):
 
         # individual Wall tiles:
         array[28][34] = 1
-        array[54][43] = 1
+        array[54][47] = 1
         array[5][49] = 3
-        array[0][30] = 0
-        array[99][30] = 0
 
         return array
 
@@ -195,25 +193,42 @@ class Board(QWidget):
         new_v = robot.v + a
         new_v_alpha = robot.v_alpha + a_alpha
         new_alpha = robot.alpha + new_v_alpha
-        radian = ((new_alpha - 90) / 180 * math.pi)
+        radian_alpha = ((new_alpha - 90) / 180 * math.pi)
 
         # calculates x coordinate, only allows values inside walls
-        new_x = (robot.x + new_v * math.cos(radian))
-        if new_x < TILE_SIZE:
-            new_x = TILE_SIZE
-        if new_x > 99 * TILE_SIZE:
-            new_x = 99 * TILE_SIZE
-        else:
-            new_x = new_x
+        new_x = (robot.x + new_v * math.cos(radian_alpha))
+        # if (new_x - robot.radius) < TILE_SIZE:
+        #     new_x = TILE_SIZE + robot.radius
+        # if (new_x + robot.radius) > 99 * TILE_SIZE:
+        #     new_x = 99 * TILE_SIZE - robot.radius
+        # else:
+        #     new_x = new_x
 
         # calculates y coordinate, only allows values inside walls
-        new_y = (robot.y + new_v * math.sin(radian))
-        if new_y < TILE_SIZE:
-            new_y = TILE_SIZE
-        if new_y > 99 * TILE_SIZE:
-            new_y = 99 * TILE_SIZE
-        else:
-            new_y = new_y
+        new_y = (robot.y + new_v * math.sin(radian_alpha))
+        # if (new_y - robot.radius) < TILE_SIZE:
+        #     new_y = TILE_SIZE + robot.radius
+        # if (new_y + robot.radius) > 99 * TILE_SIZE:
+        #     new_y = 99 * TILE_SIZE - robot.radius
+        # else:
+        #     new_y = new_y
+
+        # checks for any collision
+        current_max_overlap = 0
+        for tile_x in range(Board.TileCount):
+            for tile_y in range(Board.TileCount):
+                if self.obstacleArray[tile_x][tile_y] != 0:
+                    overlap = self.check_collision(robot, new_x, new_y, tile_x, tile_y)
+                    if overlap > current_max_overlap:
+                        current_max_overlap = overlap
+
+        # if there is a collision adjust new_v and recalc new_x, new_y
+        if current_max_overlap:
+            new_v = new_v - current_max_overlap
+            new_x = (robot.x + new_v * math.cos(radian_alpha))
+            new_y = (robot.y + new_v * math.sin(radian_alpha))
+
+
 
         # sets new values for the robot
         robot.v = new_v
@@ -221,7 +236,7 @@ class Board(QWidget):
         # places the robot on the board
         Board.place_robot(robot, new_x, new_y, new_alpha)
         # sends tuple to be used as "sensor_date"
-        return (new_x, new_y, new_alpha, new_v, new_v_alpha)
+        return new_x, new_y, new_alpha, new_v, new_v_alpha
 
     def timerEvent(self, event):
 
@@ -239,8 +254,40 @@ class Board(QWidget):
         robot.y = y
         robot.alpha = alpha
 
+    def check_collision(self, robot, robot_x, robot_y, tile_x, tile_y):
+        # calc the coordinates of the given tile
+        tile_left = tile_x * TILE_SIZE
+        tile_upper = tile_y * TILE_SIZE
 
-class Hazard():
+        # calc the closest point in the rectangle to the robot
+        closest_point_x = self.limit(robot_x, tile_left, tile_left + TILE_SIZE)
+        closest_point_y = self.limit(robot_y, tile_upper, tile_upper + TILE_SIZE)
+
+        # calc the x and y distance from the closest point to the center of the robot
+        dx = abs(closest_point_x - robot_x)
+        dy = abs(closest_point_y - robot_y)
+        # calc the actual distance
+        distance = math.sqrt(dx**2 + dy**2)
+
+        # return if collision
+        if distance > robot.radius:
+            return 0
+        else:
+            return robot.radius - distance
+
+    @staticmethod
+    def limit(value, min_limit, max_limit):
+        # omly here to assist collision method
+        # limits a value to a max and a min
+        if value > max_limit:
+            return max_limit
+        elif value < min_limit:
+            return min_limit
+        else:
+            return value
+
+
+class Hazard:
     """ A namespace for the different types of tiles on the board.
     Might contain additional functionality later.
     """
@@ -250,7 +297,7 @@ class Hazard():
     Hole = 3
 
 
-class Movement():
+class Movement:
 
     @staticmethod
     def static_movement(sensor_data, **kwargs):
@@ -312,7 +359,7 @@ class Movement():
         return a, a_alpha
 
 
-class BaseRobot():
+class BaseRobot:
 
     def __init__(self, radius, movement_funct, a_max, a_alpha_max):
 
