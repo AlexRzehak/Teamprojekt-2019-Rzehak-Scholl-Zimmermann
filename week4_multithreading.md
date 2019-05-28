@@ -418,7 +418,6 @@ class Movement:
 
     @staticmethod
     def random_movement(sensor_data, **kwargs):
-        # TODO
         if sensor_data[3] < 15:
             a = 1
             a_alpha = random.randint(-20, 20)
