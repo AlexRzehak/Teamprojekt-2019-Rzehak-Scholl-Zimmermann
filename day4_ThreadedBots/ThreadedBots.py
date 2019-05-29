@@ -224,9 +224,8 @@ class Board(QWidget):
 
         # if there is a collision adjust new_v and recalc new_x, new_y
         if current_max_overlap:
-            new_v = new_v - current_max_overlap
-            new_x = (robot.x + new_v * math.cos(radian_alpha))
-            new_y = (robot.y + new_v * math.sin(radian_alpha))
+            new_x = robot.x
+            new_y = robot.y
 
 
 
@@ -270,10 +269,7 @@ class Board(QWidget):
         distance = math.sqrt(dx**2 + dy**2)
 
         # return if collision
-        if distance > robot.radius:
-            return 0
-        else:
-            return robot.radius - distance
+        return distance < robot.radius
 
     @staticmethod
     def limit(value, min_limit, max_limit):
