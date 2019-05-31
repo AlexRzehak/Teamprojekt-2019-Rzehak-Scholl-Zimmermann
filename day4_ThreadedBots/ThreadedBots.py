@@ -38,44 +38,53 @@ class Board(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
 
-        self.obstacleArray = Board.createExampleArray(Board.TileCount)
-        self.robots = []
+        self.obstacleArray = Board.create_example_array(Board.TileCount)
         self.timer = QBasicTimer()
+
+        # TODO do timestamp stuff
+        self.time_stamp = 0
+
+        # A list of DataRobots
+        self.robots = []
 
         self.create_example_robots()
 
         for robot in self.robots:
-            robot.run()
+            robot.start()
 
         self.timer.start(Board.RefreshSpeed, self)
 
     def create_example_robots(self):
-        """Task 3: Initialize four different robots
-        and place them on the battlefield.
-        """
-        robo1 = BaseRobot(TILE_SIZE, Movement.random_movement, 1000, 1000)
-        Board.place_robot(robo1, 400, 400, 90)
-        robo1.receive_sensor_data((400, 400, 90, 0, 0))
-        self.robots.append(robo1)
 
-        robo2 = BaseRobot(TILE_SIZE * 5, Movement.spin_movement, 100, 0.2)
-        Board.place_robot(robo2, 900, 800, 0)
-        robo2.receive_sensor_data((900, 800, 0, 0, 0))
-        self.robots.append(robo2)
+        pos1 = (400, 400, 90, 0, 0)
+        self.construct_robot(TILE_SIZE, Movement.random_movement,
+                             1000, 1000, pos1)
 
-        robo3 = BaseRobot(TILE_SIZE * 2, Movement.spiral_movement, 100, 100)
-        Board.place_robot(robo3, 200, 150, 240)
-        robo3.receive_sensor_data((200, 150, 240, 0, 0))
-        self.robots.append(robo3)
+        pos2 = (900, 800, 0, 0, 0)
+        self.construct_robot(TILE_SIZE * 5, Movement.spin_movement,
+                             100, 0.2, pos2)
 
-        robo4 = BaseRobot(TILE_SIZE * 2,
-                          Movement.nussschnecke_movement, 100, 100)
-        Board.place_robot(robo4, 600, 500, 240)
-        robo4.receive_sensor_data((600, 500, 240, 0, 0))
-        self.robots.append(robo4)
+        pos3 = (200, 150, 240, 0, 0)
+        self.construct_robot(TILE_SIZE * 2, Movement.spiral_movement,
+                             100, 100, pos3)
+
+        pos4 = (600, 500, 240, 0, 0)
+        self.construct_robot(TILE_SIZE * 2, Movement.nussschnecke_movement,
+                             100, 100, pos4)
+
+    def construct_robot(self, radius, movement_funct, a_max, a_alpha_max, position):
+
+        base_robo = BaseRobot(radius, movement_funct, a_max, a_alpha_max)
+        thread_robo = ThreadRobot(base_robo)
+        data_robot = DataRobot(base_robo, thread_robo)
+
+        # a position consists of (x, y, alpha, v, v_alpha) values
+        data_robot.place_robot(*position)
+
+        self.robots.append(data_robot)
 
     @staticmethod
-    def createExampleArray(size: int):
+    def create_example_array(size: int):
 
         array = [[0] * size for row in range(size)]
 
@@ -183,12 +192,14 @@ class Board(QWidget):
 
         # TODO (much optional) some time implement collision management
 
+        # unpack robot output
+        a, a_alpha = poll
+
         # checks if acceleration is valid
-        a = poll[0]
         if a > robot.a_max:
             a = robot.a_max
+
         # checks if angle acceleration is valid
-        a_alpha = poll[1]
         if a_alpha > robot.a_alpha_max:
             a_alpha = robot.a_alpha_max
 
@@ -216,11 +227,8 @@ class Board(QWidget):
         else:
             new_y = new_y
 
-        # sets new values for the robot
-        robot.v = new_v
-        robot.v_alpha = new_v_alpha
-        # places the robot on the board
-        Board.place_robot(robot, new_x, new_y, new_alpha)
+        # re-place the robot on the board
+        Board.place_robot(robot, new_x, new_y, new_alpha, new_v, new_v_alpha)
         # sends tuple to be used as "sensor_date"
         return (new_x, new_y, new_alpha, new_v, new_v_alpha)
 
@@ -230,18 +238,24 @@ class Board(QWidget):
         """
 
         for robot in self.robots:
-            poll = robot.send_action_data()
+            poll = robot.poll_action_data()
             new_data = self.calculate_robot(poll, robot)
-            robot.receive_sensor_data(new_data)
+            robot.send_sensor_data(new_data)
 
         # update visuals
         self.update()
 
     @staticmethod
-    def place_robot(robot, x, y, alpha):
+    def place_robot(robot, x, y, alpha, v, v_alpha):
+        """Re-places a robot with given position values.
+        No sensor data sent.
+        """
         robot.x = x
         robot.y = y
         robot.alpha = alpha
+        robot.v = v
+        robot.v_alpha = v_alpha
+
 
 
 class Hazard():
@@ -254,6 +268,7 @@ class Hazard():
     Hole = 3
 
 
+# TODO use tuple unpacking to show names
 class Movement():
     """Implement different movement options."""
 
@@ -306,11 +321,15 @@ class Movement():
         return a, a_alpha
 
 
+# TODO add different Types of sensor data
+# for example: regular, alert, bonk
+class SensorData():
+    pass
+
+
 class BaseRobot():
-    """Task 2: The BaseRobot class now has the attributes needed."""
 
     def __init__(self, radius, movement_funct, a_max, a_alpha_max):
-
         # set parameters
         self.radius = radius
 
@@ -320,28 +339,27 @@ class BaseRobot():
         # Movement function to apply on current position and speed.
         self.movement_funct = movement_funct
 
-        # current position
-        self.x = 0
-        self.y = 0
-        self.alpha = 0
+        # TODO maybe add v_max, v_alpha_max
 
-        self.v = 0
-        self.v_alpha = 0
+
+class ThreadRobot(BaseRobot):
+
+    def __init__(self, base_robot: BaseRobot):
+
+        super().__init__(**vars(base_robot))
 
         # calculated by the robot
         # if the robot is not fast enough, he sucks
         self.a = 0
         self.a_alpha = 0
 
-        # # the current command executed by the robot
-        # self.command = ('stay', 0)
-        # self.signals = RobotSignals()
-
         self.thread = None
         self._sensor_queue = queue.Queue()
 
+        # TODO give the robot a memory
+        self.memory = None
+
     def run(self):
-        """Task 1: Every robot will now perform calculations in its own thread."""
 
         self.thread = threading.Thread(
             target=self._thread_action, args=(self._sensor_queue,))
@@ -354,8 +372,11 @@ class BaseRobot():
     def receive_sensor_data(self, data):
         self._sensor_queue.put(data)
 
+    # TODO implement resync method
+    def resync(self):
+        pass
+
     def _thread_action(self, q):
-        """Task 4: The robot will change a and a_alpha within its thread"""
 
         while True:
             # get() blocks the thread until queue is not empty anymore
@@ -371,6 +392,44 @@ class BaseRobot():
                           a_alpha=self.a_alpha)
 
             self.a, self.a_alpha = self.movement_funct(signal, **kwargs)
+
+
+class DataRobot(BaseRobot):
+
+    def __init__(self, base_robot: BaseRobot, thread_robot: ThreadRobot):
+
+        super().__init__(**vars(base_robot))
+
+        # current position
+        self.x = 0
+        self.y = 0
+        self.alpha = 0
+
+        self.v = 0
+        self.v_alpha = 0
+
+        self.thread_robot = thread_robot
+
+    def place_robot(self, x, y, alpha, v, v_alpha):
+
+        self.x = x
+        self.y = y
+        self.alpha = alpha
+
+        self.v = v
+        self.v_alpha = v_alpha
+
+        self.thread_robot.receive_sensor_data((x, y, alpha, v, v_alpha))
+
+    # Interface functions
+    def poll_action_data(self):
+        return self.thread_robot.send_action_data()
+
+    def send_sensor_data(self, data):
+        self.thread_robot.receive_sensor_data(data)
+
+    def start(self):
+        self.thread_robot.run()
 
 
 if __name__ == '__main__':
