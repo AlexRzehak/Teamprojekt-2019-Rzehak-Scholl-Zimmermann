@@ -35,6 +35,9 @@ class ThreadRobot(BaseRobot):
         # TODO give the robot a memory
         self.memory = None
 
+        # TODO the robot will atempt to go here (x,y)
+        self.destination = None
+
     def run(self):
 
         self.thread = threading.Thread(
@@ -60,14 +63,14 @@ class ThreadRobot(BaseRobot):
             if not signal:
                 time.sleep(0)
                 continue
-            kwargs = dict(radius=self.radius,
-                          a_max=self.a_max,
-                          a_alpha_max=self.a_alpha_max,
-                          # might be wrong lel
-                          a=self.a,
-                          a_alpha=self.a_alpha)
+            # kwargs = dict(radius=self.radius,
+                        #   a_max=self.a_max,
+                        #   a_alpha_max=self.a_alpha_max,
+                        #   # might be wrong lel
+                        #   a=self.a,
+                        #   a_alpha=self.a_alpha)
 
-            self.a, self.a_alpha = self.movement_funct(signal, **kwargs)
+            self.a, self.a_alpha = self.movement_funct(signal, self)
 
 
 # TODO add different Types of sensor data
