@@ -5,8 +5,8 @@ from PyQt5.QtCore import Qt, QPoint, QBasicTimer
 from PyQt5.QtGui import QPainter, QColor, QBrush, QPen
 from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow
 
-from Movement import Movement
-from Robot import BaseRobot, ThreadRobot
+from Movement import RandomMovement, NussschneckeMovement, SpiralMovement, SpinMovement
+from Robot import BaseRobot, ThreadRobot, SensorData
 
 FIELD_SIZE = 1000
 TILE_SIZE = 10
@@ -41,7 +41,7 @@ class Board(QWidget):
         self.timer = QBasicTimer()
 
         # TODO do timestamp stuff
-        self.time_stamp = 0
+        self.time_stamp = -1
 
         # A list of DataRobots
         self.robots = []
@@ -56,20 +56,20 @@ class Board(QWidget):
     def create_example_robots(self):
 
         pos1 = (400, 400, 90, 0, 0)
-        self.construct_robot(TILE_SIZE, Movement.random_movement,
-                             1000, 1000, pos1)
+        mov1 = RandomMovement()
+        self.construct_robot(TILE_SIZE, mov1, 1000, 1000, pos1)
 
         pos2 = (900, 800, 0, 0, 0)
-        self.construct_robot(TILE_SIZE * 5, Movement.spin_movement,
-                             100, 0.2, pos2)
+        mov2 = SpinMovement()
+        self.construct_robot(TILE_SIZE * 5, mov2, 100, 0.2, pos2)
 
         pos3 = (200, 150, 240, 0, 0)
-        self.construct_robot(TILE_SIZE * 2, Movement.spiral_movement,
-                             100, 100, pos3)
+        mov3 = SpiralMovement()
+        self.construct_robot(TILE_SIZE * 2, mov3, 100, 100, pos3)
 
         pos4 = (600, 500, 240, 0, 0)
-        self.construct_robot(TILE_SIZE * 2, Movement.nussschnecke_movement,
-                             100, 100, pos4)
+        mov4 = NussschneckeMovement()
+        self.construct_robot(TILE_SIZE * 2, mov4, 100, 100, pos4)
 
     def construct_robot(self, radius, movement_funct, a_max, a_alpha_max, position):
 
@@ -226,23 +226,66 @@ class Board(QWidget):
         else:
             new_y = new_y
 
+        new_position = (new_x, new_y, new_alpha, new_v, new_v_alpha)
+
+        new_position_col = self.calculate_collision(new_position, robot)
+
+        if new_position_col:
+            new_position = new_position_col
+
         # re-place the robot on the board
-        Board.place_robot(robot, new_x, new_y, new_alpha, new_v, new_v_alpha)
+        Board.place_robot(robot, *new_position)
         # sends tuple to be used as "sensor_date"
-        return (new_x, new_y, new_alpha, new_v, new_v_alpha)
+        return new_position_col
+
+    # TODO do collision management
+    def calculate_collision(self, new_position, robot):
+        return False
 
     def timerEvent(self, event):
         """Task 5: The Server will ask each robot about its parameters
         and re-calculate the board state.
         """
+        self.time_stamp += 1
 
         for robot in self.robots:
             poll = robot.poll_action_data()
-            new_data = self.calculate_robot(poll, robot)
-            robot.send_sensor_data(new_data)
+            collision = self.calculate_robot(poll, robot)
+            if collision:
+                m = self.create_bonk_message(collision)
+                robot.send_sensor_data(m)
+
+        if self.time_stamp % 10 == 0:
+
+            m = self.create_alert_message()
+            for robot in self.robots:
+                robot.send_sensor_data(m)
+
+        for robot in self.robots:
+            m = self.create_position_message(robot)
+            robot.send_sensor_data(m)
 
         # update visuals
         self.update()
+
+    def create_alert_message(self):
+        data = []
+
+        for robot in self.robots:
+            data.append((robot.x, robot.y))
+
+        return SensorData(SensorData.ALERT_STRING, data, self.time_stamp)
+
+    # TODO make useful
+    def create_bonk_message(self, collision):
+
+        data = None
+        return SensorData(SensorData.BONK_STRING, data, self.time_stamp)
+
+    def create_position_message(self, robot):
+
+        data = (robot.x, robot.y, robot.alpha, robot.v, robot.v_alpha)
+        return SensorData(SensorData.POSITION_STRING, data, self.time_stamp)
 
     @staticmethod
     def place_robot(robot, x, y, alpha, v, v_alpha):
@@ -268,6 +311,8 @@ class Hazard():
 
 class DataRobot(BaseRobot):
 
+    NextSerialNumber = 0
+
     def __init__(self, base_robot: BaseRobot, thread_robot: ThreadRobot):
 
         super().__init__(**vars(base_robot))
@@ -280,6 +325,9 @@ class DataRobot(BaseRobot):
         self.v = 0
         self.v_alpha = 0
 
+        self.serial_number = DataRobot.NextSerialNumber
+        DataRobot.NextSerialNumber += 1
+
         self.thread_robot = thread_robot
 
     def place_robot(self, x, y, alpha, v, v_alpha):
@@ -291,7 +339,9 @@ class DataRobot(BaseRobot):
         self.v = v
         self.v_alpha = v_alpha
 
-        self.thread_robot.receive_sensor_data((x, y, alpha, v, v_alpha))
+        # pos = (x, y, alpha, v, v_alpha)
+        # m = SensorData(SensorData.POSITION_STRING, pos, -1)
+        # self.thread_robot.receive_sensor_data(m)
 
     # Interface functions
     def poll_action_data(self):

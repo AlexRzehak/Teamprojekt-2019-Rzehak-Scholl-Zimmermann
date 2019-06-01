@@ -38,6 +38,9 @@ class ThreadRobot(BaseRobot):
         # TODO the robot will atempt to go here (x,y)
         self.destination = None
 
+        # TODO collision management
+        self.bonk_flag = False
+
     def run(self):
 
         self.thread = threading.Thread(
@@ -55,6 +58,22 @@ class ThreadRobot(BaseRobot):
     def resync(self):
         pass
 
+    def decode_input(self, signal):
+
+        if signal.message_type == SensorData.POSITION_STRING:
+            funct = self.movement_funct.position
+
+        elif signal.message_type == SensorData.ALERT_STRING:
+            funct = self.movement_funct.alert
+
+        elif signal.message_type == SensorData.BONK_STRING:
+            funct = self.movement_funct.bonk
+
+        else:
+            funct = self.movement_funct.default
+        
+        return funct
+
     def _thread_action(self, q):
 
         while True:
@@ -64,16 +83,28 @@ class ThreadRobot(BaseRobot):
                 time.sleep(0)
                 continue
             # kwargs = dict(radius=self.radius,
-                        #   a_max=self.a_max,
-                        #   a_alpha_max=self.a_alpha_max,
-                        #   # might be wrong lel
-                        #   a=self.a,
-                        #   a_alpha=self.a_alpha)
+                #   a_max=self.a_max,
+                #   a_alpha_max=self.a_alpha_max,
+                #   # might be wrong lel
+                #   a=self.a,
+                #   a_alpha=self.a_alpha)
 
-            self.a, self.a_alpha = self.movement_funct(signal, self)
+            funct = self.decode_input(signal)
+
+            self.a, self.a_alpha = funct(signal.data, self)
 
 
 # TODO add different Types of sensor data
 # for example: regular, alert, bonk
 class SensorData():
-    pass
+
+    POSITION_STRING = 'position'
+    ALERT_STRING = 'alert'
+    BONK_STRING = 'bonk'
+    IGNORE_STRING = 'ignore'
+
+    def __init__(self, message_type: str, data, time_stamp):
+
+        self.message_type = message_type
+        self.data = data
+        self.time_stamp = time_stamp
