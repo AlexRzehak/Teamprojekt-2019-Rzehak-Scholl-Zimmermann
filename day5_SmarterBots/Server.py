@@ -40,7 +40,7 @@ class Board(QWidget):
         self.obstacleArray = Board.create_example_array(Board.TileCount)
         self.timer = QBasicTimer()
 
-        # TODO do timestamp stuff
+        # TODO watch out that it doesn't get too big
         self.time_stamp = -1
 
         # A list of DataRobots
@@ -189,8 +189,6 @@ class Board(QWidget):
         sensor input.
         """
 
-        # TODO (much optional) some time implement collision management
-
         # unpack robot output
         a, a_alpha = poll
 
@@ -228,6 +226,7 @@ class Board(QWidget):
 
         new_position = (new_x, new_y, new_alpha, new_v, new_v_alpha)
 
+        # TODO call collision management
         new_position_col = self.calculate_collision(new_position, robot)
 
         if new_position_col:

@@ -1,6 +1,7 @@
 import queue
 import threading
 import time
+from collections import deque
 
 
 class BaseRobot():
@@ -20,6 +21,8 @@ class BaseRobot():
 
 class ThreadRobot(BaseRobot):
 
+    MemSize = 10
+
     def __init__(self, base_robot: BaseRobot):
 
         super().__init__(**vars(base_robot))
@@ -32,8 +35,8 @@ class ThreadRobot(BaseRobot):
         self.thread = None
         self._sensor_queue = queue.Queue()
 
-        # TODO give the robot a memory
-        self.memory = None
+        # simple memory stack for the robot.
+        self.memory = deque([])
 
         # TODO the robot will atempt to go here (x,y)
         self.destination = None
@@ -71,7 +74,7 @@ class ThreadRobot(BaseRobot):
 
         else:
             funct = self.movement_funct.default
-        
+
         return funct
 
     def _thread_action(self, q):
@@ -82,21 +85,23 @@ class ThreadRobot(BaseRobot):
             if not signal:
                 time.sleep(0)
                 continue
-            # kwargs = dict(radius=self.radius,
-                #   a_max=self.a_max,
-                #   a_alpha_max=self.a_alpha_max,
-                #   # might be wrong lel
-                #   a=self.a,
-                #   a_alpha=self.a_alpha)
 
             funct = self.decode_input(signal)
-
             self.a, self.a_alpha = funct(signal.data, self)
 
+            # TODO adapt memory policy:
+            # right now, every ALERT-message gets memorized.
+            if signal.message_type == SensorData.ALERT_STRING:
+                self.memorize(signal)
 
-# TODO add different Types of sensor data
-# for example: regular, alert, bonk
+    def memorize(self, signal):
+        self.memory.appendleft(signal)
+        if len(self.memory) > ThreadRobot.MemSize:
+            self.memory.pop()
+
+
 class SensorData():
+    """Container object for different sensor inputs."""
 
     POSITION_STRING = 'position'
     ALERT_STRING = 'alert'
