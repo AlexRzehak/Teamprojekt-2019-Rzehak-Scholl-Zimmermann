@@ -73,8 +73,8 @@ class Board(QWidget):
 
     def construct_robot(self, radius, movement_funct, a_max, a_alpha_max, position):
 
-        base_robo = BaseRobot(radius, movement_funct, a_max, a_alpha_max)
-        thread_robo = ThreadRobot(base_robo)
+        base_robo = BaseRobot(radius, a_max, a_alpha_max)
+        thread_robo = ThreadRobot(base_robo, movement_funct)
         data_robot = DataRobot(base_robo, thread_robo)
 
         # a position consists of (x, y, alpha, v, v_alpha) values
@@ -245,6 +245,8 @@ class Board(QWidget):
         """Task 5: The Server will ask each robot about its parameters
         and re-calculate the board state.
         """
+        # TODO use delta-time to interpolate visuals
+
         self.time_stamp += 1
 
         for robot in self.robots:

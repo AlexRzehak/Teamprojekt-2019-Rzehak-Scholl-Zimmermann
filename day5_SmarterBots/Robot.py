@@ -3,18 +3,19 @@ import threading
 import time
 from collections import deque
 
+from Movement import Movement
+
 
 class BaseRobot():
 
-    def __init__(self, radius, movement_funct, a_max, a_alpha_max):
+    def __init__(self, radius, a_max, a_alpha_max):
         # set parameters
         self.radius = radius
 
         self.a_max = a_max
         self.a_alpha_max = a_alpha_max
 
-        # Movement function to apply on current position and speed.
-        self.movement_funct = movement_funct
+        # self.movement_funct = movement_funct
 
         # TODO maybe add v_max, v_alpha_max
 
@@ -23,7 +24,7 @@ class ThreadRobot(BaseRobot):
 
     MemSize = 10
 
-    def __init__(self, base_robot: BaseRobot):
+    def __init__(self, base_robot: BaseRobot, movement_funct, resync_flag=False):
 
         super().__init__(**vars(base_robot))
 
@@ -35,6 +36,17 @@ class ThreadRobot(BaseRobot):
         self.thread = None
         self._sensor_queue = queue.Queue()
 
+        # auto-resync of the robot.
+        # robot will use resync functionality when resync_flag is set to True.
+        # TODO implement resync policy
+        self.resync_flag = resync_flag
+        self.resync_data = 0
+
+        # the behaviour of the robot
+        self.movement_funct = movement_funct
+        # TODO implement memory poliy
+        # self.memory_policy = None
+
         # simple memory stack for the robot.
         self.memory = deque([])
 
@@ -42,7 +54,8 @@ class ThreadRobot(BaseRobot):
         self.destination = None
 
         # TODO collision management
-        self.bonk_flag = False
+        # self.bonk_flag = False
+        # self.bonk_stack = None
 
     def run(self):
 
@@ -55,11 +68,16 @@ class ThreadRobot(BaseRobot):
         return self.a, self.a_alpha
 
     def receive_sensor_data(self, data):
+        if self.resync_flag:
+            self.resync_data = data.time_stamp
+
         self._sensor_queue.put(data)
 
-    # TODO implement resync method
-    def resync(self):
-        pass
+    def resync_check(self, signal):
+        dif = self.resync_data - signal.time_stamp
+        prio = signal.message_type in [SensorData.ALERT_STRING,
+                                       SensorData.BONK_STRING]
+        return dif >= 2 and (not prio)
 
     def decode_input(self, signal):
 
@@ -84,6 +102,10 @@ class ThreadRobot(BaseRobot):
             signal = q.get()
             if not signal:
                 time.sleep(0)
+                continue
+
+            # auto-resync
+            if self.resync_flag and self.resync_check(signal):
                 continue
 
             funct = self.decode_input(signal)
