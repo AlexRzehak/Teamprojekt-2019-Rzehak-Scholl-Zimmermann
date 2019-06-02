@@ -4,27 +4,22 @@ import random
 class Movement():
     """Implement different movement options."""
 
-    @staticmethod
-    def default(data, robot):
+    def default(self, data, robot):
         return robot.a, robot.a_alpha
 
-    @staticmethod
-    def position(data, robot):
+    def position(self, data, robot):
         return 0, 0
 
-    @staticmethod
-    def alert(data, robot):
+    def alert(self, data, robot):
         return robot.a, robot.a_alpha
 
-    @staticmethod
-    def bonk(data, robot):
+    def bonk(self, data, robot):
         return robot.a, robot.a_alpha
 
 
 class RandomMovement(Movement):
 
-    @staticmethod
-    def position(data, robot):
+    def position(self, data, robot):
 
         x, y, alpha, v, v_alpha = data
 
@@ -39,8 +34,7 @@ class RandomMovement(Movement):
 
 class NussschneckeMovement(Movement):
 
-    @staticmethod
-    def position(data, robot):
+    def position(self, data, robot):
 
         x, y, alpha, v, v_alpha = data
 
@@ -56,8 +50,7 @@ class NussschneckeMovement(Movement):
 
 class SpiralMovement(Movement):
 
-    @staticmethod
-    def position(data, robot):
+    def position(self, data, robot):
 
         x, y, alpha, v, v_alpha = data
 
@@ -73,8 +66,7 @@ class SpiralMovement(Movement):
 
 class SpinMovement(Movement):
 
-    @staticmethod
-    def position(data, robot):
+    def position(self, data, robot):
 
         x, y, alpha, v, v_alpha = data
 
