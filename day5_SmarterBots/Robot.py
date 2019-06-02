@@ -3,8 +3,6 @@ import threading
 import time
 from collections import deque
 
-from Movement import Movement
-
 
 class BaseRobot():
 
@@ -24,7 +22,8 @@ class ThreadRobot(BaseRobot):
 
     MemSize = 10
 
-    def __init__(self, base_robot: BaseRobot, movement_funct, resync_flag=False):
+    def __init__(self, base_robot: BaseRobot, movement_funct,
+                 resync_flag=False):
 
         super().__init__(**vars(base_robot))
 
