@@ -5,7 +5,8 @@ from PyQt5.QtCore import Qt, QPoint, QBasicTimer
 from PyQt5.QtGui import QPainter, QColor, QBrush, QPen
 from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow
 
-from Movement import RandomMovement, NussschneckeMovement, SpiralMovement, SpinMovement, FollowMovement
+from Movement import RandomMovement, NussschneckeMovement, SpiralMovement, SpinMovement, FollowMovement, \
+    RandomTargetMovement
 from Robot import BaseRobot, ThreadRobot, SensorData
 
 FIELD_SIZE = 1000
@@ -55,21 +56,21 @@ class Board(QWidget):
 
     def create_example_robots(self):
 
-        pos1 = (400, 400, 90, 0, 0)
-        mov1 = RandomMovement()
-        self.construct_robot(TILE_SIZE, mov1, 1000, 1000, pos1)
+        pos1 = (500, 500, 90, 0, 0)
+        mov1 = RandomTargetMovement()
+        self.construct_robot(TILE_SIZE * 4, mov1, 15, 15, pos1)
 
-        """pos2 = (500, 500, 0, 0, 0)
-        mov2 = SpinMovement()
-        self.construct_robot(TILE_SIZE * 1.5, mov2, 20, 20, pos2)"""
+        pos2 = (10, 10, 0, 0, 0)
+        mov2 = FollowMovement(0)
+        self.construct_robot(TILE_SIZE * 3, mov2, 15, 15, pos2)
 
-        pos3 = (200, 150, 240, 0, 0)
-        mov3 = FollowMovement(0)
+        pos3 = (990, 10, 240, 0, 0)
+        mov3 = FollowMovement(1)
         self.construct_robot(TILE_SIZE * 2, mov3, 15, 15, pos3)
 
-        """pos4 = (600, 500, 240, 0, 0)
-        mov4 = NussschneckeMovement()
-        self.construct_robot(TILE_SIZE * 2, mov4, 100, 100, pos4)"""
+        pos4 = (500, 990, 240, 0, 0)
+        mov4 = FollowMovement(2)
+        self.construct_robot(TILE_SIZE * 1, mov4, 15, 15, pos4)
 
     def construct_robot(self, radius, movement_funct, a_max, a_alpha_max, position):
 
