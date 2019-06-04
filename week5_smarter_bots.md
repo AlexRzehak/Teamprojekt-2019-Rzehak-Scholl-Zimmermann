@@ -793,7 +793,7 @@ class Movement():
 
 
 
-# This robot just got a new follower!
+## This robot just got a new follower!
 
 # Improve Collision Detection
 ```python
@@ -820,7 +820,7 @@ new_position = (new_x, new_y, new_alpha, new_v, new_v_alpha)
         # return if collision
         return distance < robot.radius
 ```
-### new - returns closest position without collision and amount of backtracing
+### New - returns closest position without collision and amount of backtracing
 ```python
     # checks if the robot collides with a specific tile
     def collision_single_tile(self, new_position, robot, tile_x, tile_y):
