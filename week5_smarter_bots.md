@@ -795,7 +795,7 @@ class Movement():
 
 ## This robot just got a new follower!
 
-# Improve Collision Detection
+# Improve Collision Management
 ```python
 new_position = (new_x, new_y, new_alpha, new_v, new_v_alpha)
 ```
