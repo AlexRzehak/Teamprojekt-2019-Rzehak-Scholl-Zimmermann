@@ -420,20 +420,147 @@ class Board(QWidget):
 
 
 # Movement Functions
-# TODO TIM
-# DIESE PROBLEME KANNST/SOLLTEST DU ANSPRECHEN (zusätzlich zu welchen, von denen ich nix weiß)
 ## Problem: Finite State Machine
 ### A movement function in its current state doesn't provide a memory!
-
+```python
+        self.destination = None
+```
 ## Solution: Additional Functionality for the Robot
 ### We add a new attribute to the robot: A destination tuple.
 
 
 ## Problem: Follow a specific Robot
 ### How do we know, which robot will be our target?
+```python
+class FollowMovement(Movement):
 
+    def __init__(self, target):
+        self.target = target
+
+    # simple variant without extrapolation
+
+    def alert(self, data, robot):
+        # setting robot destination to the coordinates of target robot
+        robot.destination = data[self.target]
+        return robot.a, robot.a_alpha
+
+    def position(self, data, robot):
+        x, y, alpha, v, v_alpha = data
+
+        # setting the robots destination
+        if not robot.destination:
+            destination_x = x
+            destination_y = y
+        else:
+            destination_x = robot.destination[0]
+            destination_y = robot.destination[1]
+```
 ## Solution: Additional Functionality for the Movement Behaviour
 ### 
+Every 10 ticks the robot receives  the alert signal which contains the coordinate tupels of each robot in a list. This way the input number can be used as index of the list to get the position of the targeted robot.
+
+## Problem: Moving towards destination 
+### What is the angle between the direction on the robot and its target?
+```python
+    def position(self, data, robot):
+        x, y, alpha, v, v_alpha = data
+
+        # setting the robots destination
+        if not robot.destination:
+            destination_x = x
+            destination_y = y
+        else:
+            destination_x = robot.destination[0]
+            destination_y = robot.destination[1]
+            
+        # calculating angle between the velocity vector and the destination vector
+        alpha = alpha % 360
+        radian = (alpha / 180 * math.pi)
+
+        # calculating movement vector
+        velocity_vector_x = (v * math.sin(radian))
+        velocity_vector_y = - (v * math.cos(radian))
+        velocity_vector_magnitude = math.sqrt(velocity_vector_x**2 + velocity_vector_y**2)
+
+        # calculating vector between robot and destination
+        destination_vector_x = destination_x - x
+        destination_vector_y = destination_y - y
+        destination_vector_magnitude = math.sqrt(destination_vector_x**2 + destination_vector_y**2)
+
+        # calculating the value of the angle_change needed
+        vector_multiplication = (velocity_vector_x*destination_vector_x + velocity_vector_y*destination_vector_y)
+        magnitude_multiplication = velocity_vector_magnitude * destination_vector_magnitude
+        destination_alpha = math.acos(vector_multiplication / magnitude_multiplication)
+        destination_alpha_degree = (destination_alpha * 180 / math.pi) % 360
+```
+## Solution: Vector calculations
+### 
+First we calculate the values of the velocity vector and the vector between the robots coordinates and its destination.
+With these vectors we can now do the maths needed to calculate the smaller angle towards the target.
+
+### In which direction is the destination?
+```python
+        ...
+        # determining direction based on sign of the vectors cross product
+        cross_product = FollowMovement.cross_product((velocity_vector_x,velocity_vector_y),(destination_vector_x,destination_vector_y))
+        
+        if cross_product > 0:
+            delta_alpha = destination_alpha_degree
+            direction = "right"
+        elif cross_product < 0:
+            delta_alpha = - destination_alpha_degree
+            direction = "left"
+        elif cross_product == 0:
+            delta_alpha = destination_alpha_degree
+            direction = "none"
+            
+ @staticmethod
+    def cross_product(B, P):
+        # calculates cross product
+        b_x = B[0]
+        b_y = B[1]
+        p_x = P[0]
+        p_y = P[1]
+
+        cp = b_x * p_y - b_y * p_x
+        return cp
+```
+## Solution: The cross product
+### 
+When inputting the earlyer calculated vectors we can tell the direction by looking at the sign of the cross product.
+With this information we set the direction and give the wanted angle change (delta_alpha) a sign.
+
+### How should the robot behave?
+```python
+        # setting a to accelerate to a speed of 10
+        if v <= 10:
+            a = 1
+        else:
+            a = 0
+            
+        # setting a_alpha values
+        a_alpha_max = robot.a_alpha_max
+        
+        if direction == "right":
+            if delta_alpha >= a_alpha_max + v_alpha:
+                a_alpha = a_alpha_max
+            elif delta_alpha < a_alpha_max + v_alpha:
+                a_alpha = delta_alpha - v_alpha
+
+        elif direction == "left":
+            if abs(delta_alpha) >= abs(a_alpha_max - v_alpha):
+                a_alpha = - a_alpha_max
+            elif abs(delta_alpha) < abs(a_alpha_max - v_alpha):
+                a_alpha = -(abs(delta_alpha)) + abs(v_alpha)
+
+        if direction == "none":
+            a_alpha = 0
+
+        return a, a_alpha
+``` 
+The robot increases its speed by one each timestep until it reaches a speed of 15.
+If the angle can't be changed sufficiently within one tick the angle acceleration is set to its maximum value.
+If the angle can be changed sufficiently we set it to the change of alpha we want minus the current velocity to get the correct value for a_alpha.
 
 # Collision
 # TODO LEANDER
