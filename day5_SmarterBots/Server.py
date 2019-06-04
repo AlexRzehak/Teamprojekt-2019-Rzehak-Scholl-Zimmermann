@@ -238,21 +238,32 @@ class Board(QWidget):
         new_position = (new_x, new_y, new_alpha, new_v, new_v_alpha)
         return new_position
 
-    def calculate_collision(self, new_position, robot):
-        max_sub = 0
-        final_position = new_position
-        for tile_x in range(Board.TileCount):
-            for tile_y in range(Board.TileCount):
-                if self.obstacleArray[tile_x][tile_y] != 0:
-                    sub_from_v, current_position = self.collision_single_tile(new_position, robot, tile_x, tile_y)
-                    if sub_from_v > max_sub:
-                        max_sub = sub_from_v
-                        final_position = current_position
+    def calculate_collision(self, position_full_v, robot):
+        collided = False
+        current_testing_position = position_full_v
+        while True:
+            max_sub = 0
+            for tile_x in range(Board.TileCount):
+                for tile_y in range(Board.TileCount):
+                    if self.obstacleArray[tile_x][tile_y] != 0:
+                        sub_from_v, current_position_col = self.collision_single_tile(current_testing_position, robot, tile_x, tile_y)
+                        if sub_from_v > max_sub:
+                            max_sub = sub_from_v
+                            final_position_col = current_position_col
 
-        if max_sub:
-            final_position = (final_position[0], final_position[1],
-                              final_position[2], 0, final_position[4])
-        return final_position
+            if max_sub != 0:
+                current_testing_position = final_position_col
+                # test if this adjusted position needs more adjusting
+                collided = True
+            else:
+                break
+
+        if collided:
+            final_position_col = (final_position_col[0], final_position_col[1],
+                                  final_position_col[2], 0, final_position_col[4])
+        else:
+            final_position_col = position_full_v
+        return final_position_col
 
     def collision_single_tile(self, new_position, robot, tile_x, tile_y):
         # calc the coordinates of the given tile
@@ -409,4 +420,3 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     game = Game()
     sys.exit(app.exec_())
-
