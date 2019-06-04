@@ -22,3 +22,5 @@ Pythons list comprehensions allow us to easily create the two lists of coordinat
 The coordinates of the topleft corners of all black tiles are now read from the lists as all combinations of possible tuples. But since the coordinates of the bootom left half correspond to the ones of the top right half with x and y swapped, we only need to create half of the tuple list and paint the corresponding coordinates in one iteration.
 
 Of course, we needed to make sure to put a white tile in the top left corner of the board.
+
+## We won't actually play chess, but at least we are not playing checkers...
