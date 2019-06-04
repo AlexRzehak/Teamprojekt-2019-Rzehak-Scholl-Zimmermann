@@ -801,13 +801,16 @@ new_position = (new_x, new_y, new_alpha, new_v, new_v_alpha)
 ```
 ### Test for collision on a specific tile and trace back until it doesn't collide
 ```python
+    # checks if the robot collides with a specific tile
     def collision_single_tile(self, new_position, robot, tile_x, tile_y):
         # calc the coordinates of the given tile
         tile_left = tile_x * TILE_SIZE
         tile_upper = tile_y * TILE_SIZE
 
+        # loop terminates when there is no collision
         sub_from_v = 0
         while True:
+            # recalc the position with the adjusted v
             new_position_col = self.calculate_position(robot, new_position[3] - sub_from_v, new_position[4])
 
             # calc the closest point in the rectangle to the robot
@@ -817,44 +820,65 @@ new_position = (new_x, new_y, new_alpha, new_v, new_v_alpha)
             # calc the x and y distance from the closest point to the center of the robot
             dx = abs(closest_point.x() - new_position_col[0])
             dy = abs(closest_point.y() - new_position_col[1])
+
             # calc the actual distance
             distance = math.sqrt(dx ** 2 + dy ** 2)
+
+            # distance >= robot.radius means no collision
+            # sub_from_v >= new_position[4] means v <= 0
             if distance >= robot.radius or sub_from_v >= new_position[4]:
                 break
+
+            # if there is a collision reduce v by one and try again (backtracing)
             else:
                 sub_from_v += 1
 
-        # return if collision
+        # return the amount of backtracing (0 if no collision) and the closest position that is collision free
         return sub_from_v, new_position_col
 ```
 ### Test for every tile and take the biggest step back
 ### Repeat until there is no collision
 ```python
-    def calculate_collision(self, position_full_v, robot):
+    def calculate_collision(self, robot, new_v, new_v_alpha):
+
+        # calculates the new position without factoring in any collisions
+        position_no_col = self.calculate_position(robot, new_v, new_v_alpha)
+        current_testing_position = position_no_col
+
+        # loop continues until the current position doesn't produce any collision
         collided = False
-        current_testing_position = position_full_v
         while True:
             max_sub = 0
+
+            # tests all 100x100 tiles in the array for collision
             for tile_x in range(Board.TileCount):
                 for tile_y in range(Board.TileCount):
                     if self.obstacleArray[tile_x][tile_y] != 0:
-                        sub_from_v, current_position_col = self.collision_single_tile(current_testing_position, 
+
+                        # takes the position where it doesn't collide and the amount it backtraced
+                        sub_from_v, current_position_col = self.collision_single_tile(current_testing_position,
                                                                                       robot, tile_x, tile_y)
+
+                        # saves position with the most backtracing (the tile where it was in deepest)
                         if sub_from_v > max_sub:
                             max_sub = sub_from_v
                             final_position_col = current_position_col
 
-            if max_sub != 0:
+            # if this iteration (one position) produced any collisions the final position gets tested again
+            if max_sub:
                 current_testing_position = final_position_col
                 # test if this adjusted position needs more adjusting
                 collided = True
+            # if the position didn't produce any collisions the robot doesn't collide with anything
             else:
                 break
 
+        # if any iteration produced any collisions : v = 0
         if collided:
             final_position_col = (final_position_col[0], final_position_col[1],
                                   final_position_col[2], 0, final_position_col[4])
+        # if there was na collision at all, the original position is returned
         else:
-            final_position_col = position_full_v
+            final_position_col = position_no_col
         return final_position_col
 ```
