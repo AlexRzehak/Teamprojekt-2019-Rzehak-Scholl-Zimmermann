@@ -4,7 +4,7 @@ import time
 from collections import deque
 
 
-class BaseRobot():
+class BaseRobot:
 
     def __init__(self, radius, a_max, a_alpha_max):
         # set parameters
@@ -121,7 +121,7 @@ class ThreadRobot(BaseRobot):
             self.memory.pop()
 
 
-class SensorData():
+class SensorData:
     """Container object for different sensor inputs."""
 
     POSITION_STRING = 'position'
