@@ -258,7 +258,7 @@ class Board(QWidget):
                 for tile_y in range(Board.TileCount):
                     if self.obstacleArray[tile_x][tile_y] != 0:
 
-                        # takes the position where it doesn't collide and the amount it backtraced
+                        # takes the position where it doesn't collide and the amount it backtracked
                         sub_from_v, current_position_col = self.collision_single_tile(current_testing_position,
                                                                                       robot, tile_x, tile_y)
 
@@ -314,11 +314,11 @@ class Board(QWidget):
             if distance >= robot.radius or sub_from_v >= new_position[4]:
                 break
 
-            # if there is a collision reduce v by one and try again (backtracing)
+            # if there is a collision reduce v by one and try again (backtracking)
             else:
                 sub_from_v += 1
 
-        # return the amount of backtracing (0 if no collision) and the closest position that is collision free
+        # return the amount of backtracking (0 if no collision) and the closest position that is collision free
         return sub_from_v, new_position_col
 
     # only here to assist collision_single_tile
