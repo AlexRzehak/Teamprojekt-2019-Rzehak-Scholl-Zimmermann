@@ -54,23 +54,27 @@ class Board(QWidget):
         self.timer.start(Board.RefreshSpeed, self)
 
     def create_example_robots(self):
+        """Task 4: Use the FollowMovement and
+        RandomTargetMovement movement functions.
+        """
 
         pos1 = (500, 500, 90, 0, 0)
         mov1 = RandomTargetMovement()
         self.construct_robot(TILE_SIZE * 4, mov1, 15, 15, pos1)
 
-        pos2 = (10, 10, 0, 0, 0)
+        pos2 = (45, 45, 0, 0, 0)
         mov2 = FollowMovement(0)
         self.construct_robot(TILE_SIZE * 3, mov2, 15, 15, pos2)
 
-        pos3 = (990, 10, 240, 0, 0)
+        pos3 = (965, 35, 240, 0, 0)
         mov3 = FollowMovement(1)
         self.construct_robot(TILE_SIZE * 2, mov3, 15, 15, pos3)
 
-        pos4 = (500, 990, 240, 0, 0)
+        pos4 = (500, 970, 240, 0, 0)
         mov4 = FollowMovement(2)
         self.construct_robot(TILE_SIZE * 1, mov4, 15, 15, pos4)
 
+    # a more complex construction method is needed
     def construct_robot(self, radius, movement_funct, a_max, a_alpha_max, position):
 
         base_robot = BaseRobot(radius, a_max, a_alpha_max)
@@ -185,8 +189,7 @@ class Board(QWidget):
 
     def calculate_robot(self, poll, robot):
         """Uses current position data of robot robot and acceleration values
-        polled from the robot to calculate new position values and create new
-        sensor input.
+        polled from the robot to calculate new position values.
         """
 
         # unpack robot output
@@ -209,7 +212,7 @@ class Board(QWidget):
 
         # re-place the robot on the board
         Board.place_robot(robot, *new_position_col)
-        # sends tuple to be used as "sensor_date"
+        # sends tuple to be used as "sensor_data"
         return new_position_col
 
     def calculate_position(self, robot, new_v, new_v_alpha):
@@ -239,6 +242,7 @@ class Board(QWidget):
         return new_position
 
     def calculate_collision(self, robot, new_v, new_v_alpha):
+        """Task 2: Here the collision with obstacles is calculated."""
 
         # calculates the new position without factoring in any collisions
         position_no_col = self.calculate_position(robot, new_v, new_v_alpha)
@@ -291,7 +295,8 @@ class Board(QWidget):
         sub_from_v = 0
         while True:
             # recalc the position with the adjusted v
-            new_position_col = self.calculate_position(robot, new_position[3] - sub_from_v, new_position[4])
+            new_position_col = self.calculate_position(
+                robot, new_position[3] - sub_from_v, new_position[4])
 
             # calc the closest point in the rectangle to the robot
             closest_point = QPoint(self.limit(new_position_col[0], tile_left, tile_left + TILE_SIZE),
@@ -328,8 +333,7 @@ class Board(QWidget):
             return value
 
     def timerEvent(self, event):
-        """Task 5: The Server will ask each robot about its parameters
-        and re-calculate the board state.
+        """Task 1: Every tick the servers sends position data to each robot.
         """
         # TODO use delta-time to interpolate visuals
 
@@ -337,11 +341,13 @@ class Board(QWidget):
 
         for robot in self.robots:
             poll = robot.poll_action_data()
-            collision = self.calculate_robot(poll, robot)
-            if collision:
-                m = self.create_bonk_message(collision)
-                robot.send_sensor_data(m)
+            self.calculate_robot(poll, robot)
+            # if collision:
+            #     m = self.create_bonk_message(collision)
+            #     robot.send_sensor_data(m)
 
+        # Task 3: Every 10th tick,
+        # the server tells every robot the position of every robot.
         if self.time_stamp % 10 == 0:
 
             m = self.create_alert_message()
@@ -363,8 +369,9 @@ class Board(QWidget):
 
         return SensorData(SensorData.ALERT_STRING, data, self.time_stamp)
 
-    # TODO make useful
+    # TODO this is just a frame implementation.
     def create_bonk_message(self, collision):
+        print('hi')
 
         data = None
         return SensorData(SensorData.BONK_STRING, data, self.time_stamp)
@@ -397,6 +404,7 @@ class Hazard:
 
 
 class DataRobot(BaseRobot):
+    """Data representation of the robots for the server."""
 
     NextSerialNumber = 0
 

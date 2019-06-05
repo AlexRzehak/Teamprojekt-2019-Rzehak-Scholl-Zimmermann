@@ -19,6 +19,7 @@ class BaseRobot:
 
 
 class ThreadRobot(BaseRobot):
+    """The autonomous robot unit performing actions in its own thread."""
 
     MemSize = 10
 
@@ -49,10 +50,10 @@ class ThreadRobot(BaseRobot):
         # simple memory stack for the robot.
         self.memory = deque([])
 
-        # TODO the robot will atempt to go here (x,y)
+        # the robot will atempt to go here (x,y)
         self.destination = None
 
-        # TODO collision management
+        # TODO BONK management
         # self.bonk_flag = False
         # self.bonk_stack = None
 
@@ -63,6 +64,7 @@ class ThreadRobot(BaseRobot):
         self.thread.daemon = True
         self.thread.start()
 
+    # Interface Functions
     def send_action_data(self):
         return self.a, self.a_alpha
 
@@ -72,12 +74,14 @@ class ThreadRobot(BaseRobot):
 
         self._sensor_queue.put(data)
 
+    # Static resync policy
     def resync_check(self, signal):
         dif = self.resync_data - signal.time_stamp
         prio = signal.message_type in [SensorData.ALERT_STRING,
                                        SensorData.BONK_STRING]
         return dif >= 2 and (not prio)
 
+    # Simple message type decoding
     def decode_input(self, signal):
 
         if signal.message_type == SensorData.POSITION_STRING:
@@ -115,7 +119,9 @@ class ThreadRobot(BaseRobot):
             if signal.message_type == SensorData.ALERT_STRING:
                 self.memorize(signal)
 
+    # Save a message in the memory.
     def memorize(self, signal):
+
         self.memory.appendleft(signal)
         if len(self.memory) > ThreadRobot.MemSize:
             self.memory.pop()
@@ -124,6 +130,7 @@ class ThreadRobot(BaseRobot):
 class SensorData:
     """Container object for different sensor inputs."""
 
+    # These Strings represent the different message_types
     POSITION_STRING = 'position'
     ALERT_STRING = 'alert'
     BONK_STRING = 'bonk'
