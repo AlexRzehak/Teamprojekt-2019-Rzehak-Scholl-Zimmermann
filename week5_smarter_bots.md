@@ -425,6 +425,7 @@ class Board(QWidget):
 ```python
         self.destination = None
 ```
+This attribute can store a tuple of coordinates so that the robot remembers its destination.
 ## Solution: Additional Functionality for the Robot
 ### We add a new attribute to the robot: A destination tuple.
 
@@ -456,7 +457,6 @@ class FollowMovement(Movement):
             destination_y = robot.destination[1]
 ```
 ## Solution: Additional Functionality for the Movement Behaviour
-### 
 Every 10 ticks the robot receives  the alert signal which contains the coordinate tupels of each robot in a list. This way the input number can be used as index of the list to get the position of the targeted robot.
 
 ## Problem: Moving towards destination 
@@ -494,7 +494,6 @@ Every 10 ticks the robot receives  the alert signal which contains the coordinat
         destination_alpha_degree = (destination_alpha * 180 / math.pi) % 360
 ```
 ## Solution: Vector calculations
-### 
 First we calculate the values of the velocity vector and the vector between the robots coordinates and its destination.
 With these vectors we can now do the maths needed to calculate the smaller angle towards the target.
 
@@ -526,7 +525,6 @@ With these vectors we can now do the maths needed to calculate the smaller angle
         return cp
 ```
 ## Solution: The cross product
-### 
 When inputting the earlyer calculated vectors we can tell the direction by looking at the sign of the cross product.
 With this information we set the direction and give the wanted angle change (delta_alpha) a sign.
 
