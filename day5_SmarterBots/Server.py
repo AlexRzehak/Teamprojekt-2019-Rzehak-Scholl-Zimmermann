@@ -2,11 +2,11 @@ import sys
 import math
 
 from PyQt5.QtCore import Qt, QPoint, QBasicTimer
-from PyQt5.QtGui import QPainter, QColor, QBrush, QPen
+from PyQt5.QtGui import QPainter, QColor, QBrush, QPen, QVector2D
 from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow
 
-from Movement import Movement
-from Robot import BaseRobot, ThreadRobot
+from Movement import FollowMovement, RandomTargetMovement
+from Robot import BaseRobot, ThreadRobot, SensorData
 
 FIELD_SIZE = 1000
 TILE_SIZE = 10
@@ -32,7 +32,7 @@ class Game(QMainWindow):
 
 class Board(QWidget):
     TileCount = int(FIELD_SIZE / TILE_SIZE)
-    RefreshSpeed = 40
+    RefreshSpeed = 33
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -40,8 +40,8 @@ class Board(QWidget):
         self.obstacleArray = Board.create_example_array(Board.TileCount)
         self.timer = QBasicTimer()
 
-        # TODO do timestamp stuff
-        self.time_stamp = 0
+        # TODO watch out that it doesn't get too big
+        self.time_stamp = -1
 
         # A list of DataRobots
         self.robots = []
@@ -54,28 +54,32 @@ class Board(QWidget):
         self.timer.start(Board.RefreshSpeed, self)
 
     def create_example_robots(self):
+        """Task 4: Use the FollowMovement and
+        RandomTargetMovement movement functions.
+        """
 
-        pos1 = (400, 400, 90, 0, 0)
-        self.construct_robot(TILE_SIZE, Movement.random_movement,
-                             1000, 1000, pos1)
+        pos1 = (500, 500, 90, 0, 0)
+        mov1 = RandomTargetMovement()
+        self.construct_robot(TILE_SIZE * 4, mov1, 15, 15, pos1)
 
-        pos2 = (900, 800, 0, 0, 0)
-        self.construct_robot(TILE_SIZE * 5, Movement.spin_movement,
-                             100, 0.2, pos2)
+        pos2 = (45, 45, 0, 0, 0)
+        mov2 = FollowMovement(0)
+        self.construct_robot(TILE_SIZE * 3, mov2, 15, 15, pos2)
 
-        pos3 = (200, 150, 240, 0, 0)
-        self.construct_robot(TILE_SIZE * 2, Movement.spiral_movement,
-                             100, 100, pos3)
+        pos3 = (965, 35, 240, 0, 0)
+        mov3 = FollowMovement(1)
+        self.construct_robot(TILE_SIZE * 2, mov3, 15, 15, pos3)
 
-        pos4 = (600, 500, 240, 0, 0)
-        self.construct_robot(TILE_SIZE * 2, Movement.nussschnecke_movement,
-                             100, 100, pos4)
+        pos4 = (500, 970, 240, 0, 0)
+        mov4 = FollowMovement(2)
+        self.construct_robot(TILE_SIZE * 1, mov4, 15, 15, pos4)
 
+    # a more complex construction method is needed
     def construct_robot(self, radius, movement_funct, a_max, a_alpha_max, position):
 
-        base_robo = BaseRobot(radius, movement_funct, a_max, a_alpha_max)
-        thread_robo = ThreadRobot(base_robo)
-        data_robot = DataRobot(base_robo, thread_robo)
+        base_robot = BaseRobot(radius, a_max, a_alpha_max)
+        thread_robo = ThreadRobot(base_robot, movement_funct)
+        data_robot = DataRobot(base_robot, thread_robo)
 
         # a position consists of (x, y, alpha, v, v_alpha) values
         data_robot.place_robot(*position)
@@ -97,7 +101,7 @@ class Board(QWidget):
 
         # individual Wall tiles:
         array[28][34] = 1
-        array[54][43] = 1
+        array[56][43] = 1
         array[5][49] = 3
         array[0][30] = 0
         array[99][30] = 0
@@ -185,11 +189,8 @@ class Board(QWidget):
 
     def calculate_robot(self, poll, robot):
         """Uses current position data of robot robot and acceleration values
-        polled from the robot to calculate new position values and create new
-        sensor input.
+        polled from the robot to calculate new position values.
         """
-
-        # TODO (much optional) some time implement collision management
 
         # unpack robot output
         a, a_alpha = poll
@@ -202,9 +203,20 @@ class Board(QWidget):
         if a_alpha > robot.a_alpha_max:
             a_alpha = robot.a_alpha_max
 
-        # calculates new values
+        # calculates velocities
         new_v = robot.v + a
         new_v_alpha = robot.v_alpha + a_alpha
+
+        # calculates the new position - factors in collisions
+        new_position_col = self.calculate_collision(robot, new_v, new_v_alpha)
+
+        # re-place the robot on the board
+        Board.place_robot(robot, *new_position_col)
+        # sends tuple to be used as "sensor_data"
+        return new_position_col
+
+    def calculate_position(self, robot, new_v, new_v_alpha):
+        # calculates alpha
         new_alpha = robot.alpha + new_v_alpha
         radian = ((new_alpha - 90) / 180 * math.pi)
 
@@ -226,23 +238,148 @@ class Board(QWidget):
         else:
             new_y = new_y
 
-        # re-place the robot on the board
-        Board.place_robot(robot, new_x, new_y, new_alpha, new_v, new_v_alpha)
-        # sends tuple to be used as "sensor_date"
-        return (new_x, new_y, new_alpha, new_v, new_v_alpha)
+        new_position = (new_x, new_y, new_alpha, new_v, new_v_alpha)
+        return new_position
+
+    def calculate_collision(self, robot, new_v, new_v_alpha):
+        """Task 2: Here the collision with obstacles is calculated."""
+
+        # calculates the new position without factoring in any collisions
+        position_no_col = self.calculate_position(robot, new_v, new_v_alpha)
+        current_testing_position = position_no_col
+
+        # loop continues until the current position doesn't produce any collision
+        collided = False
+        while True:
+            max_sub = 0
+
+            # tests all 100x100 tiles in the array for collision
+            for tile_x in range(Board.TileCount):
+                for tile_y in range(Board.TileCount):
+                    if self.obstacleArray[tile_x][tile_y] != 0:
+
+                        # takes the position where it doesn't collide and the amount it backtraced
+                        sub_from_v, current_position_col = self.collision_single_tile(current_testing_position,
+                                                                                      robot, tile_x, tile_y)
+
+                        # saves position with the most backtracing (the tile where it was in deepest)
+                        if sub_from_v > max_sub:
+                            max_sub = sub_from_v
+                            final_position_col = current_position_col
+
+            # if this iteration (one position) produced any collisions the final position gets tested again
+            if max_sub:
+                current_testing_position = final_position_col
+                # test if this adjusted position needs more adjusting
+                collided = True
+            # if the position didn't produce any collisions the robot doesn't collide with anything
+            else:
+                break
+
+        # if any iteration produced any collisions : v = 0
+        if collided:
+            final_position_col = (final_position_col[0], final_position_col[1],
+                                  final_position_col[2], 0, final_position_col[4])
+        # if there was na collision at all, the original position is returned
+        else:
+            final_position_col = position_no_col
+        return final_position_col
+
+    # checks if the robot collides with a specific tile
+    def collision_single_tile(self, new_position, robot, tile_x, tile_y):
+        # calc the coordinates of the given tile
+        tile_left = tile_x * TILE_SIZE
+        tile_upper = tile_y * TILE_SIZE
+
+        # loop terminates when there is no collision
+        sub_from_v = 0
+        while True:
+            # recalc the position with the adjusted v
+            new_position_col = self.calculate_position(
+                robot, new_position[3] - sub_from_v, new_position[4])
+
+            # calc the closest point in the rectangle to the robot
+            closest_point = QPoint(self.limit(new_position_col[0], tile_left, tile_left + TILE_SIZE),
+                                   self.limit(new_position_col[1], tile_upper, tile_upper + TILE_SIZE))
+
+            # calc the x and y distance from the closest point to the center of the robot
+            dx = abs(closest_point.x() - new_position_col[0])
+            dy = abs(closest_point.y() - new_position_col[1])
+
+            # calc the actual distance
+            distance = math.sqrt(dx ** 2 + dy ** 2)
+
+            # distance >= robot.radius means no collision
+            # sub_from_v >= new_position[4] means v <= 0
+            if distance >= robot.radius or sub_from_v >= new_position[4]:
+                break
+
+            # if there is a collision reduce v by one and try again (backtracing)
+            else:
+                sub_from_v += 1
+
+        # return the amount of backtracing (0 if no collision) and the closest position that is collision free
+        return sub_from_v, new_position_col
+
+    # only here to assist collision_single_tile
+    # limits a value to a max and a min
+    @staticmethod
+    def limit(value, min_limit, max_limit):
+        if value > max_limit:
+            return max_limit
+        elif value < min_limit:
+            return min_limit
+        else:
+            return value
 
     def timerEvent(self, event):
-        """Task 5: The Server will ask each robot about its parameters
-        and re-calculate the board state.
+        """Task 1: Every tick the servers sends position data to each robot.
         """
+        # TODO use delta-time to interpolate visuals
+
+        self.time_stamp += 1
 
         for robot in self.robots:
             poll = robot.poll_action_data()
-            new_data = self.calculate_robot(poll, robot)
-            robot.send_sensor_data(new_data)
+            self.calculate_robot(poll, robot)
+            # if collision:
+            #     m = self.create_bonk_message(collision)
+            #     robot.send_sensor_data(m)
+
+        # Task 3: Every 10th tick,
+        # the server tells every robot the position of every robot.
+        if self.time_stamp % 10 == 0:
+
+            m = self.create_alert_message()
+            for robot in self.robots:
+                robot.send_sensor_data(m)
+
+        for robot in self.robots:
+            m = self.create_position_message(robot)
+            robot.send_sensor_data(m)
 
         # update visuals
         self.update()
+
+    def create_alert_message(self):
+        data = []
+
+        for robot in self.robots:
+            data.append((robot.x, robot.y))
+
+        return SensorData(SensorData.ALERT_STRING, data, self.time_stamp)
+
+    # TODO this is just a frame implementation.
+    def create_bonk_message(self, collision):
+        print('hi')
+
+        data = None
+        return SensorData(SensorData.BONK_STRING, data, self.time_stamp)
+
+    def create_position_message(self, robot):
+
+        data = (robot.x, robot.y, robot.alpha, robot.v, robot.v_alpha)
+        return SensorData(SensorData.POSITION_STRING, data, self.time_stamp)
 
     @staticmethod
     def place_robot(robot, x, y, alpha, v, v_alpha):
@@ -256,7 +393,7 @@ class Board(QWidget):
         robot.v_alpha = v_alpha
 
 
-class Hazard():
+class Hazard:
     """ A namespace for the different types of tiles on the board.
     Might contain additional functionality later.
     """
@@ -267,6 +404,9 @@ class Hazard():
 
 
 class DataRobot(BaseRobot):
+    """Data representation of the robots for the server."""
+
+    NextSerialNumber = 0
 
     def __init__(self, base_robot: BaseRobot, thread_robot: ThreadRobot):
 
@@ -280,6 +420,9 @@ class DataRobot(BaseRobot):
         self.v = 0
         self.v_alpha = 0
 
+        self.serial_number = DataRobot.NextSerialNumber
+        DataRobot.NextSerialNumber += 1
+
         self.thread_robot = thread_robot
 
     def place_robot(self, x, y, alpha, v, v_alpha):
@@ -291,7 +434,9 @@ class DataRobot(BaseRobot):
         self.v = v
         self.v_alpha = v_alpha
 
-        self.thread_robot.receive_sensor_data((x, y, alpha, v, v_alpha))
+        # pos = (x, y, alpha, v, v_alpha)
+        # m = SensorData(SensorData.POSITION_STRING, pos, -1)
+        # self.thread_robot.receive_sensor_data(m)
 
     # Interface functions
     def poll_action_data(self):
