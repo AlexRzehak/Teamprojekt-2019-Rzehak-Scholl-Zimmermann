@@ -586,7 +586,7 @@ new_position = (new_x, new_y, new_alpha, new_v, new_v_alpha)
         # return if collision
         return distance < robot.radius
 ```
-### New - returns closest position without collision and amount of backtracing
+### New - returns closest position without collision and amount of backtracking
 ```python
     # checks if the robot collides with a specific tile
     def collision_single_tile(self, new_position, robot, tile_x, tile_y):
@@ -615,11 +615,11 @@ new_position = (new_x, new_y, new_alpha, new_v, new_v_alpha)
             if distance >= robot.radius or sub_from_v >= new_position[4]:
                 break
 
-            # if there is a collision reduce v by one and try again (backtracing)
+            # if there is a collision reduce v by one and try again (backtracking)
             else:
                 sub_from_v += 1
 
-        # return the amount of backtracing (0 if no collision) and the closest position that is collision free
+        # return the amount of backtracking (0 if no collision) and the closest position that is collision free
         return sub_from_v, new_position_col
 ```
 ## Test for every tile and take the biggest step back
@@ -641,10 +641,10 @@ new_position = (new_x, new_y, new_alpha, new_v, new_v_alpha)
                 for tile_y in range(Board.TileCount):
                     if self.obstacleArray[tile_x][tile_y] != 0:
 
-                        # takes the position where it doesn't collide and the amount it backtraced
+                        # takes the position where it doesn't collide and the amount it backtracked
                         sub_from_v, current_position_col = self.collision_single_tile(current_testing_position,
                                                                                       robot, tile_x, tile_y)
-                        # saves position with the most backtracing (the tile where it was in deepest)
+                        # saves position with the most backtracking (the tile where it was in deepest)
                         if sub_from_v > max_sub:
                             max_sub = sub_from_v
                             final_position_col = current_position_col
