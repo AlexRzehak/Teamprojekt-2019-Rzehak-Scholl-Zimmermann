@@ -10,6 +10,8 @@ from Robot import BaseRobot, ThreadRobot, SensorData
 
 FIELD_SIZE = 1000
 TILE_SIZE = 10
+# TODO: maybe put in robot setup (it then may differ from robot to robot)
+ROBOT_FOV = 15
 
 
 class Game(QMainWindow):
@@ -187,6 +189,20 @@ class Board(QWidget):
         # drawing small circle
         qp.drawEllipse(center, 2, 2)
 
+    def calculate_vision(self, poll, robot):
+        # TODO: check if objects are in vision:
+        #   if so give robot coordinates
+        list_of_objects = []
+        for obj in list_of_objects:
+            object_in_triangle = self.object_in_triangle(...)
+            if object_in_triangle:
+                return 0
+
+    def object_in_triangle(self, point_a, point_b, point_c, object_coordinate):
+        # may be easy with ?QTriangle?
+        return False
+
+
     def calculate_robot(self, poll, robot):
         """Uses current position data of robot robot and acceleration values
         polled from the robot to calculate new position values.
@@ -342,6 +358,7 @@ class Board(QWidget):
         for robot in self.robots:
             poll = robot.poll_action_data()
             self.calculate_robot(poll, robot)
+            # TODO: send info from: self.calculate_vision(poll, robot)
             # if collision:
             #     m = self.create_bonk_message(collision)
             #     robot.send_sensor_data(m)
@@ -453,3 +470,4 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     game = Game()
     sys.exit(app.exec_())
+
