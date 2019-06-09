@@ -179,7 +179,7 @@ class Board(QWidget):
 
         # calculating the point to draw the line that indicates alpha
         radian = ((robot.alpha - 90) / 180 * math.pi)
-        direction = center + QPoint(math.cos(radian) * robot.radius, 
+        direction = center + QPoint(math.cos(radian) * robot.radius,
                                     math.sin(radian) * robot.radius)
 
         # setting color of directional line
@@ -192,32 +192,45 @@ class Board(QWidget):
         # drawing small circle
         qp.drawEllipse(center, 2, 2)
 
-    def calculate_vision(self, robot, list_of_object_coordinates):
+    def walls_in_vision(self, robot):
         # TODO: check if objects are in vision:
         #   if so give robot coordinates
         objects_in_fov = []
         robot_fov = self.calculate_fov(robot)
-        for obj in list_of_object_coordinates:
-            object_in_fov = robot_fov.contains(obj)
-            if object_in_fov:
+        for obj in self.create_list_of_wall_centers():
+            if robot_fov.contains(obj):
                 objects_in_fov.append(obj)
         return objects_in_fov
 
-    def calculate_fov(self, robot):
+    def create_list_of_wall_centers(self):
+        list_of_centers = []
+        for row in range(Board.TileCount):
+            for col in range(Board.TileCount):
+                if self.obstacleArray[row][col] != 0:
+                    list_of_centers.append(row * TILE_SIZE + TILE_SIZE/2,
+                                           col * TILE_SIZE + TILE_SIZE/2)
+        return list_of_centers
+
+    def robots_in_vision(self, robot):
+        # TODO
+        return 0
+
+    @staticmethod
+    def calculate_fov(robot):
         robot_center = QPoint(robot.x, robot.y)
-        
+
         left_angle = robot.alpha - ROBOT_FOV_ANGLE/2
         left_radian = ((left_angle - 90) / 180 * math.pi)
         left_length = ROBOT_FOV_ANGLE / math.cos(left_radian)
-        left_corner = robot_center + QPoint(math.cos(left_radian) * left_length, 
+        left_corner = robot_center + QPoint(math.cos(left_radian) * left_length,
                                             math.sin(left_radian) * left_length)
-        
+
         right_angle = robot.alpha + ROBOT_FOV_ANGLE/2
         right_radian = ((right_angle - 90) / 180 * math.pi)
         right_length = ROBOT_FOV_ANGLE / math.cos(right_radian)
         right_corner = robot_center + QPoint(math.cos(right_radian) * right_length,
                                              math.sin(right_radian) * right_length)
-        
+
         return QPolygonF([robot_center, left_corner, right_corner])
 
     def calculate_robot(self, poll, robot):
@@ -255,7 +268,7 @@ class Board(QWidget):
 
         # calculates x coordinate, only allows values inside walls
         new_x = (robot.x + new_v * math.cos(radian))
-        self.limit(new_x, 0 , FIELD_SIZE)
+        self.limit(new_x, 0, FIELD_SIZE)
 
         # calculates y coordinate, only allows values inside walls
         new_y = (robot.y + new_v * math.sin(radian))
@@ -365,7 +378,15 @@ class Board(QWidget):
         for robot in self.robots:
             poll = robot.poll_action_data()
             self.calculate_robot(poll, robot)
-            # TODO: send info from: self.calculate_vision(poll, robot)
+
+            # TODO: send following info properly
+            #   walls:
+            #       w = self.calculate_vision(robot, self.listOfWallCenters)
+            #       robot.send_sensor_data(w)
+            #   robots:
+            #       r = self.robots_in_vision(robot)
+            #       robot. send_sensor_data(r)
+
             # if collision:
             #     m = self.create_bonk_message(collision)
             #     robot.send_sensor_data(m)
@@ -477,4 +498,3 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     game = Game()
     sys.exit(app.exec_())
-
