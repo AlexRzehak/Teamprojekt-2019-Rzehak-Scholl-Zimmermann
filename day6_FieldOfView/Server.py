@@ -2,7 +2,7 @@ import sys
 import math
 
 from PyQt5.QtCore import Qt, QPoint, QBasicTimer
-from PyQt5.QtGui import QPainter, QColor, QBrush, QPen, QVector2D
+from PyQt5.QtGui import QPainter, QColor, QBrush, QPen, QPolygonF
 from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow
 
 from Movement import FollowMovement, RandomTargetMovement
@@ -10,8 +10,11 @@ from Robot import BaseRobot, ThreadRobot, SensorData
 
 FIELD_SIZE = 1000
 TILE_SIZE = 10
+
 # TODO: maybe put in robot setup (it then may differ from robot to robot)
-ROBOT_FOV = 15
+ROBOT_FOV_RANGE = 100
+# MUST BE < 180:
+ROBOT_FOV_ANGLE = 15
 
 
 class Game(QMainWindow):
@@ -176,12 +179,12 @@ class Board(QWidget):
 
         # calculating the point to draw the line that indicates alpha
         radian = ((robot.alpha - 90) / 180 * math.pi)
-        direction = QPoint(math.cos(radian) * robot.radius + QPoint.x(center),
-                           math.sin(radian) * robot.radius + QPoint.y(center))
+        direction = center + QPoint(math.cos(radian) * robot.radius, 
+                                    math.sin(radian) * robot.radius)
+
         # setting color of directional line
         qp.setPen(Qt.red)
-        qp.drawLine(QPoint.x(center), QPoint.y(center),
-                    QPoint.x(direction), QPoint.y(direction))
+        qp.drawLine(center, direction)
 
         # marking center point
         # setting center color
@@ -189,19 +192,33 @@ class Board(QWidget):
         # drawing small circle
         qp.drawEllipse(center, 2, 2)
 
-    def calculate_vision(self, poll, robot):
+    def calculate_vision(self, robot, list_of_object_coordinates):
         # TODO: check if objects are in vision:
         #   if so give robot coordinates
-        list_of_objects = []
-        for obj in list_of_objects:
-            object_in_triangle = self.object_in_triangle(...)
-            if object_in_triangle:
-                return 0
+        objects_in_fov = []
+        robot_fov = self.calculate_fov(robot)
+        for obj in list_of_object_coordinates:
+            object_in_fov = robot_fov.contains(obj)
+            if object_in_fov:
+                objects_in_fov.append(obj)
+        return objects_in_fov
 
-    def object_in_triangle(self, point_a, point_b, point_c, object_coordinate):
-        # may be easy with ?QTriangle?
-        return False
-
+    def calculate_fov(self, robot):
+        robot_center = QPoint(robot.x, robot.y)
+        
+        left_angle = robot.alpha - ROBOT_FOV_ANGLE/2
+        left_radian = ((left_angle - 90) / 180 * math.pi)
+        left_length = ROBOT_FOV_ANGLE / math.cos(left_radian)
+        left_corner = robot_center + QPoint(math.cos(left_radian) * left_length, 
+                                            math.sin(left_radian) * left_length)
+        
+        right_angle = robot.alpha + ROBOT_FOV_ANGLE/2
+        right_radian = ((right_angle - 90) / 180 * math.pi)
+        right_length = ROBOT_FOV_ANGLE / math.cos(right_radian)
+        right_corner = robot_center + QPoint(math.cos(right_radian) * right_length,
+                                             math.sin(right_radian) * right_length)
+        
+        return QPolygonF([robot_center, left_corner, right_corner])
 
     def calculate_robot(self, poll, robot):
         """Uses current position data of robot robot and acceleration values
@@ -238,21 +255,11 @@ class Board(QWidget):
 
         # calculates x coordinate, only allows values inside walls
         new_x = (robot.x + new_v * math.cos(radian))
-        if new_x < TILE_SIZE:
-            new_x = TILE_SIZE
-        if new_x > 99 * TILE_SIZE:
-            new_x = 99 * TILE_SIZE
-        else:
-            new_x = new_x
+        self.limit(new_x, 0 , FIELD_SIZE)
 
         # calculates y coordinate, only allows values inside walls
         new_y = (robot.y + new_v * math.sin(radian))
-        if new_y < TILE_SIZE:
-            new_y = TILE_SIZE
-        if new_y > 99 * TILE_SIZE:
-            new_y = 99 * TILE_SIZE
-        else:
-            new_y = new_y
+        self.limit(new_y, 0, FIELD_SIZE)
 
         new_position = (new_x, new_y, new_alpha, new_v, new_v_alpha)
         return new_position
