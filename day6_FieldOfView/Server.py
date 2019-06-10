@@ -12,9 +12,9 @@ FIELD_SIZE = 1000
 TILE_SIZE = 10
 
 # TODO: maybe put in robot setup (it then may differ from robot to robot)
-ROBOT_FOV_RANGE = 100
+ROBOT_FOV_RANGE = 200
 # MUST BE < 180:
-ROBOT_FOV_ANGLE = 15
+ROBOT_FOV_ANGLE = 50
 
 
 class Game(QMainWindow):
@@ -191,24 +191,12 @@ class Board(QWidget):
         qp.setBrush(Qt.white)
         # drawing small circle
         qp.drawEllipse(center, 2, 2)
-        
+
         # draw FOV
-        qp.setBrush(QColor(133, 242, 252, 100))
-        robot_center = QPoint(robot.x, robot.y)
-
-        left_angle = robot.alpha - ROBOT_FOV_ANGLE/2
-        left_radian = ((left_angle - 90) / 180 * math.pi)
-        left_length = ROBOT_FOV_RANGE
-        left_corner = robot_center + QPoint(math.cos(left_radian) * left_length,
-                                            math.sin(left_radian) * left_length)
-
-        right_angle = robot.alpha + ROBOT_FOV_ANGLE/2
-        right_radian = ((right_angle - 90) / 180 * math.pi)
-        right_length = ROBOT_FOV_RANGE
-        right_corner = robot_center + QPoint(math.cos(right_radian) * right_length,
-                                             math.sin(right_radian) * right_length)
-        
-        qp.drawPolygon(robot_center,left_corner,right_corner)
+        fov_color = QColor(255, 200, 255, 100)
+        qp.setBrush(fov_color)
+        qp.setPen(fov_color)
+        qp.drawPolygon(self.calculate_fov(robot))
 
     def walls_in_vision(self, robot):
         # TODO: check if objects are in vision:
@@ -225,8 +213,8 @@ class Board(QWidget):
         for row in range(Board.TileCount):
             for col in range(Board.TileCount):
                 if self.obstacleArray[row][col] != 0:
-                    list_of_centers.append(row * TILE_SIZE + TILE_SIZE/2,
-                                           col * TILE_SIZE + TILE_SIZE/2)
+                    list_of_centers.append(row * TILE_SIZE + TILE_SIZE / 2,
+                                           col * TILE_SIZE + TILE_SIZE / 2)
         return list_of_centers
 
     def robots_in_vision(self, robot):
@@ -237,19 +225,18 @@ class Board(QWidget):
     def calculate_fov(robot):
         robot_center = QPoint(robot.x, robot.y)
 
-        left_angle = robot.alpha - ROBOT_FOV_ANGLE/2
+        fov_angle_radian = math.radians(ROBOT_FOV_ANGLE / 2)
+        side_length = ROBOT_FOV_RANGE / math.cos(fov_angle_radian)
+
+        left_angle = robot.alpha - ROBOT_FOV_ANGLE / 2
         left_radian = ((left_angle - 90) / 180 * math.pi)
-        left_length = ROBOT_FOV_RANGE
+        left_corner = robot_center + QPoint(math.cos(left_radian) * side_length,
+                                            math.sin(left_radian) * side_length)
 
-        left_corner = robot_center + QPoint(math.cos(left_radian) * left_length,
-                                            math.sin(left_radian) * left_length)
-
-        right_angle = robot.alpha + ROBOT_FOV_ANGLE/2
+        right_angle = robot.alpha + ROBOT_FOV_ANGLE / 2
         right_radian = ((right_angle - 90) / 180 * math.pi)
-        right_length = ROBOT_FOV_RANGE
-        right_corner = robot_center + QPoint(math.cos(right_radian) * right_length,
-                                             math.sin(right_radian) * right_length)
-
+        right_corner = robot_center + QPoint(math.cos(right_radian) * side_length,
+                                             math.sin(right_radian) * side_length)
         return QPolygonF([robot_center, left_corner, right_corner])
 
     def calculate_robot(self, poll, robot):
@@ -473,7 +460,6 @@ class DataRobot(BaseRobot):
     NextSerialNumber = 0
 
     def __init__(self, base_robot: BaseRobot, thread_robot: ThreadRobot):
-
         super().__init__(**vars(base_robot))
 
         # current position
@@ -490,7 +476,6 @@ class DataRobot(BaseRobot):
         self.thread_robot = thread_robot
 
     def place_robot(self, x, y, alpha, v, v_alpha):
-
         self.x = x
         self.y = y
         self.alpha = alpha
