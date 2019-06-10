@@ -191,6 +191,24 @@ class Board(QWidget):
         qp.setBrush(Qt.white)
         # drawing small circle
         qp.drawEllipse(center, 2, 2)
+        
+        # draw FOV
+        qp.setBrush(QColor(133, 242, 252, 100))
+        robot_center = QPoint(robot.x, robot.y)
+
+        left_angle = robot.alpha - ROBOT_FOV_ANGLE/2
+        left_radian = ((left_angle - 90) / 180 * math.pi)
+        left_length = ROBOT_FOV_RANGE
+        left_corner = robot_center + QPoint(math.cos(left_radian) * left_length,
+                                            math.sin(left_radian) * left_length)
+
+        right_angle = robot.alpha + ROBOT_FOV_ANGLE/2
+        right_radian = ((right_angle - 90) / 180 * math.pi)
+        right_length = ROBOT_FOV_RANGE
+        right_corner = robot_center + QPoint(math.cos(right_radian) * right_length,
+                                             math.sin(right_radian) * right_length)
+        
+        qp.drawPolygon(robot_center,left_corner,right_corner)
 
     def walls_in_vision(self, robot):
         # TODO: check if objects are in vision:
@@ -221,13 +239,14 @@ class Board(QWidget):
 
         left_angle = robot.alpha - ROBOT_FOV_ANGLE/2
         left_radian = ((left_angle - 90) / 180 * math.pi)
-        left_length = ROBOT_FOV_ANGLE / math.cos(left_radian)
+        left_length = ROBOT_FOV_RANGE
+
         left_corner = robot_center + QPoint(math.cos(left_radian) * left_length,
                                             math.sin(left_radian) * left_length)
 
         right_angle = robot.alpha + ROBOT_FOV_ANGLE/2
         right_radian = ((right_angle - 90) / 180 * math.pi)
-        right_length = ROBOT_FOV_ANGLE / math.cos(right_radian)
+        right_length = ROBOT_FOV_RANGE
         right_corner = robot_center + QPoint(math.cos(right_radian) * right_length,
                                              math.sin(right_radian) * right_length)
 
