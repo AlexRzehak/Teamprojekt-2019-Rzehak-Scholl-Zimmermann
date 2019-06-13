@@ -6,12 +6,14 @@ from collections import deque
 
 class BaseRobot:
 
-    def __init__(self, radius, a_max, a_alpha_max):
+    def __init__(self, radius, a_max, a_alpha_max, fov_angle=90):
         # set parameters
         self.radius = radius
 
         self.a_max = a_max
         self.a_alpha_max = a_alpha_max
+
+        self.fov_angle = fov_angle
 
         # self.movement_funct = movement_funct
 
@@ -81,22 +83,21 @@ class ThreadRobot(BaseRobot):
                                        SensorData.BONK_STRING]
         return dif >= 2 and (not prio)
 
-    # Simple message type decoding
-    def decode_input(self, signal):
+    # Use your BRAIN
+    def process_data(self, signal):
 
-        if signal.message_type == SensorData.POSITION_STRING:
-            funct = self.movement_funct.position
+        dicc = {SensorData.POSITION_STRING: self.movement_funct.position,
+                SensorData.VISION_STRING: self.movement_funct.vision,
+                SensorData.ALERT_STRING: self.movement_funct.alert,
+                SensorData.BONK_STRING: self.movement_funct.bonk}
 
-        elif signal.message_type == SensorData.ALERT_STRING:
-            funct = self.movement_funct.alert
+        t = signal.message_type
+        funct = self.movement_funct.default
 
-        elif signal.message_type == SensorData.BONK_STRING:
-            funct = self.movement_funct.bonk
+        if t in dicc:
+            funct = dicc[t]
 
-        else:
-            funct = self.movement_funct.default
-
-        return funct
+        self.a, self.a_alpha = funct(signal.data, self)
 
     def _thread_action(self, q):
 
@@ -111,8 +112,7 @@ class ThreadRobot(BaseRobot):
             if self.resync_flag and self.resync_check(signal):
                 continue
 
-            funct = self.decode_input(signal)
-            self.a, self.a_alpha = funct(signal.data, self)
+            self.process_data(signal)
 
             # TODO adapt memory policy:
             # right now, every ALERT-message gets memorized.
@@ -132,6 +132,7 @@ class SensorData:
 
     # These Strings represent the different message_types
     POSITION_STRING = 'position'
+    VISION_STRING = 'vision'
     ALERT_STRING = 'alert'
     BONK_STRING = 'bonk'
     IGNORE_STRING = 'ignore'

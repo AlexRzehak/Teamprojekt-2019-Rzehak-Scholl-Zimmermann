@@ -10,8 +10,6 @@ from Robot import BaseRobot, ThreadRobot, SensorData
 
 FIELD_SIZE = 1000
 TILE_SIZE = 10
-# TODO: maybe put in robot setup (it then may differ from robot to robot)
-ROBOT_FOV = 15
 
 
 class Game(QMainWindow):
@@ -61,27 +59,30 @@ class Board(QWidget):
         """
 
         pos1 = (500, 500, 90, 0, 0)
-        mov1 = RandomTargetMovement()
-        self.construct_robot(TILE_SIZE * 4, mov1, 15, 15, pos1)
+        mv1 = RandomTargetMovement()
+        self.construct_robot(TILE_SIZE * 4, mv1, 15, 15, pos1, alert_flag=True)
 
         pos2 = (45, 45, 0, 0, 0)
-        mov2 = FollowMovement(0)
-        self.construct_robot(TILE_SIZE * 3, mov2, 15, 15, pos2)
+        mv2 = FollowMovement(0)
+        self.construct_robot(TILE_SIZE * 3, mv2, 15, 15, pos2, alert_flag=True)
 
         pos3 = (965, 35, 240, 0, 0)
-        mov3 = FollowMovement(1)
-        self.construct_robot(TILE_SIZE * 2, mov3, 15, 15, pos3)
+        mv3 = FollowMovement(1)
+        self.construct_robot(TILE_SIZE * 2, mv3, 15, 15, pos3, alert_flag=True)
 
         pos4 = (500, 970, 240, 0, 0)
-        mov4 = FollowMovement(2)
-        self.construct_robot(TILE_SIZE * 1, mov4, 15, 15, pos4)
+        mv4 = FollowMovement(2)
+        self.construct_robot(TILE_SIZE * 1, mv4, 15, 15, pos4, alert_flag=True)
 
     # a more complex construction method is needed
-    def construct_robot(self, radius, movement_funct, a_max, a_alpha_max, position):
+    def construct_robot(self, radius, movement_funct, a_max, a_alpha_max,
+                        position, alert_flag=False):
 
         base_robot = BaseRobot(radius, a_max, a_alpha_max)
         thread_robo = ThreadRobot(base_robot, movement_funct)
         data_robot = DataRobot(base_robot, thread_robo)
+        if alert_flag:
+            data_robot.set_alert_flag()
 
         # a position consists of (x, y, alpha, v, v_alpha) values
         data_robot.place_robot(*position)
@@ -189,19 +190,13 @@ class Board(QWidget):
         # drawing small circle
         qp.drawEllipse(center, 2, 2)
 
-    def calculate_vision(self, poll, robot):
-        # TODO: check if objects are in vision:
-        #   if so give robot coordinates
-        list_of_objects = []
-        for obj in list_of_objects:
-            object_in_triangle = self.object_in_triangle(...)
-            if object_in_triangle:
-                return 0
+    # TODO implement correctly
+    def calculate_vision_board(self, robot):
+        return [[0] * Board.TileCount for row in range(Board.TileCount)]
 
-    def object_in_triangle(self, point_a, point_b, point_c, object_coordinate):
-        # may be easy with ?QTriangle?
-        return False
-
+    # TODO implement correctly
+    def calculate_vision_robots(self, robot):
+        return [False] * len(self.robots)
 
     def calculate_robot(self, poll, robot):
         """Uses current position data of robot robot and acceleration values
@@ -358,7 +353,6 @@ class Board(QWidget):
         for robot in self.robots:
             poll = robot.poll_action_data()
             self.calculate_robot(poll, robot)
-            # TODO: send info from: self.calculate_vision(poll, robot)
             # if collision:
             #     m = self.create_bonk_message(collision)
             #     robot.send_sensor_data(m)
@@ -369,9 +363,12 @@ class Board(QWidget):
 
             m = self.create_alert_message()
             for robot in self.robots:
-                robot.send_sensor_data(m)
+                if robot.alert_flag:
+                    robot.send_sensor_data(m)
 
         for robot in self.robots:
+            v = self.create_vision_message(robot)
+            robot.send_sensor_data(v)
             m = self.create_position_message(robot)
             robot.send_sensor_data(m)
 
@@ -397,6 +394,14 @@ class Board(QWidget):
 
         data = (robot.x, robot.y, robot.alpha, robot.v, robot.v_alpha)
         return SensorData(SensorData.POSITION_STRING, data, self.time_stamp)
+
+    def create_vision_message(self, robot):
+
+        board_data = self.calculate_vision_board(robot)
+        robot_data = self.calculate_vision_robots(robot)
+        data = (board_data, robot_data)
+
+        return SensorData(SensorData.VISION_STRING, data, self.time_stamp)
 
     @staticmethod
     def place_robot(robot, x, y, alpha, v, v_alpha):
@@ -440,6 +445,8 @@ class DataRobot(BaseRobot):
         self.serial_number = DataRobot.NextSerialNumber
         DataRobot.NextSerialNumber += 1
 
+        self.alert_flag = False
+
         self.thread_robot = thread_robot
 
     def place_robot(self, x, y, alpha, v, v_alpha):
@@ -465,9 +472,11 @@ class DataRobot(BaseRobot):
     def start(self):
         self.thread_robot.run()
 
+    def set_alert_flag(self, value=True):
+        self.alert_flag = value
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     game = Game()
     sys.exit(app.exec_())
-

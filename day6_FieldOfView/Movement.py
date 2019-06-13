@@ -11,6 +11,9 @@ class Movement:
     def position(self, data, robot):
         return 0, 0
 
+    def vision(self, data, robot):
+        return robot.a, robot.a_alpha
+
     def alert(self, data, robot):
         return robot.a, robot.a_alpha
 
