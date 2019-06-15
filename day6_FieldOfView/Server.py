@@ -12,7 +12,7 @@ FIELD_SIZE = 1000
 TILE_SIZE = 10
 
 # TODO: maybe put in robot setup (it then may differ from robot to robot)
-ROBOT_FOV_RANGE = 200
+ROBOT_FOV_RANGE = 2000
 # MUST BE < 180:
 ROBOT_FOV_ANGLE = 50
 
@@ -237,6 +237,7 @@ class Board(QWidget):
         right_radian = ((right_angle - 90) / 180 * math.pi)
         right_corner = robot_center + QPoint(math.cos(right_radian) * side_length,
                                              math.sin(right_radian) * side_length)
+
         return QPolygonF([robot_center, left_corner, right_corner])
 
     def calculate_robot(self, poll, robot):
@@ -292,19 +293,28 @@ class Board(QWidget):
 
         # loop continues until the current position doesn't produce any collision
         collided = False
+
+        # calculate the boundries of the area where tiles will be tested
+        up_left_corner = QPoint(robot.x - (robot.radius + new_v), robot.y - (robot.radius + new_v))
+        down_right_corner = QPoint(robot.x + (robot.radius + new_v), robot.y + (robot.radius + new_v))
+        leftmost_tile = int(up_left_corner.x() / TILE_SIZE)
+        rightmost_tile = int(down_right_corner.x() / TILE_SIZE) + 1
+        upmost_tile = int(up_left_corner.y() / TILE_SIZE)
+        downmost_tile = int(down_right_corner.y() / TILE_SIZE) + 1
+
         while True:
             max_sub = 0
 
             # tests all 100x100 tiles in the array for collision
-            for tile_x in range(Board.TileCount):
-                for tile_y in range(Board.TileCount):
+            for tile_x in range(leftmost_tile, rightmost_tile):
+                for tile_y in range(upmost_tile, downmost_tile):
                     if self.obstacleArray[tile_x][tile_y] != 0:
 
-                        # takes the position where it doesn't collide and the amount it backtraced
+                        # takes the position where it doesn't collide and the amount it backtracked
                         sub_from_v, current_position_col = self.collision_single_tile(current_testing_position,
                                                                                       robot, tile_x, tile_y)
 
-                        # saves position with the most backtracing (the tile where it was in deepest)
+                        # saves position with the most backtracking (the tile where it was in deepest)
                         if sub_from_v > max_sub:
                             max_sub = sub_from_v
                             final_position_col = current_position_col
@@ -356,11 +366,11 @@ class Board(QWidget):
             if distance >= robot.radius:  # or sub_from_v >= new_position[4]:
                 break
 
-            # if there is a collision reduce v by one and try again (backtracing)
+            # if there is a collision reduce v by one and try again (backtracking)
             else:
                 sub_from_v += 1
 
-        # return the amount of backtracing (0 if no collision) and the closest position that is collision free
+        # return the amount of backtracking (0 if no collision) and the closest position that is collision free
         return sub_from_v, new_position_col
 
     # only here to assist collision_single_tile
