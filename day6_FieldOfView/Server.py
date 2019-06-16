@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow
 
 from Movement import FollowMovement, RandomTargetMovement
 from Robot import BaseRobot, ThreadRobot, SensorData
+import Utils
 
 FIELD_SIZE = 1000
 TILE_SIZE = 10
@@ -37,7 +38,11 @@ class Board(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
 
-        self.obstacleArray = Board.create_example_array(Board.TileCount)
+        self.obstacleArray = Utils.create_example_array(Board.TileCount)
+        print(self.obstacleArray)
+        self.obstacle_list = Utils.generate_obstacle_list(
+            self.obstacleArray, Board.TileCount)
+
         self.timer = QBasicTimer()
 
         # TODO watch out that it doesn't get too big
@@ -88,28 +93,6 @@ class Board(QWidget):
         data_robot.place_robot(*position)
 
         self.robots.append(data_robot)
-
-    @staticmethod
-    def create_example_array(size: int):
-
-        array = [[0] * size for row in range(size)]
-
-        # setting the sidewalls by setting all the first and last Elements
-        # of each row and column to 1
-        for x in range(size):
-            array[x][0] = 2
-            array[x][size - 1] = 2
-            array[0][x] = 2
-            array[size - 1][x] = 2
-
-        # individual Wall tiles:
-        array[28][34] = 1
-        array[56][43] = 1
-        array[5][49] = 3
-        array[0][30] = 0
-        array[99][30] = 0
-
-        return array
 
     def paintEvent(self, e):
 
@@ -190,13 +173,74 @@ class Board(QWidget):
         # drawing small circle
         qp.drawEllipse(center, 2, 2)
 
-    # TODO implement correctly
     def calculate_vision_board(self, robot):
-        return [[0] * Board.TileCount for row in range(Board.TileCount)]
 
-    # TODO implement correctly
+        points = self.obstacle_list * 10 + 5
+        point = (robot.x, robot.y)
+
+        diffs, dists = Utils.calculate_angles(points, point,
+                                              robot.alpha, robot.fov_angle)
+
+        out = []
+        for obst, dif, dist in zip(self.obstacle_list, diffs, dists):
+            if dif <= 0:
+                x, y = obst
+                data = (obst, self.obstacleArray[x][y], dist)
+                out.append(data)
+
+        # out = [[0] * 100 for row in range(100)]
+        # for pair in zip(self.obstacle_list, diffs):
+        #     if pair[1] <= 0:
+        #         x, y = pair[0]
+        #         out[x][y] = self.obstacleArray[x][y]
+
+        return out
+
     def calculate_vision_robots(self, robot):
-        return [False] * len(self.robots)
+        point = (robot.x, robot.y)
+
+        result = [False] * len(self.robots)
+        point_list = []
+
+        calc_list = []
+        calc_indices = []
+
+        # distance-check
+        for index, rb in enumerate(self.robots):
+            pos = (rb.x, rb.y)
+            check, d = Utils.overlap_check(pos, point, rb.radius, robot.radius)
+            point_list.append((pos, d))
+
+            if check:
+                result[index] = (pos, d)
+            # add more cases, if you want to propagate the angles as well
+            else:
+                calc_list.append(pos)
+                calc_indices.append(index)
+
+        # angle-check
+        angles = []
+        if calc_list:
+            angles, _ = Utils.calculate_angles(calc_list, point,
+                                               robot.alpha, robot.fov_angle)
+
+        for index, dif in zip(calc_indices, angles):
+            if dif <= 0:
+                result[index] = point_list[index]
+
+        # ray-check
+        ray1 = Utils.vector_from_angle(robot.alpha - robot.fov_angle/2)
+        ray2 = Utils.vector_from_angle(robot.alpha + robot.fov_angle/2)
+
+        for index, val in enumerate(result):
+            if not val:
+                rb = self.robots[index]
+                circle = (rb.x, rb.y, rb.radius)
+                if (Utils.ray_check(point, ray1, circle) or
+                        Utils.ray_check(point, ray2, circle)):
+                    result[index] = point_list[index]
+
+        return result
 
     def calculate_robot(self, poll, robot):
         """Uses current position data of robot robot and acceleration values
@@ -310,8 +354,8 @@ class Board(QWidget):
                 robot, new_position[3] - sub_from_v, new_position[4])
 
             # calc the closest point in the rectangle to the robot
-            closest_point = QPoint(self.limit(new_position_col[0], tile_left, tile_left + TILE_SIZE),
-                                   self.limit(new_position_col[1], tile_upper, tile_upper + TILE_SIZE))
+            closest_point = QPoint(Utils.limit(new_position_col[0], tile_left, tile_left + TILE_SIZE),
+                                   Utils.limit(new_position_col[1], tile_upper, tile_upper + TILE_SIZE))
 
             # calc the x and y distance from the closest point to the center of the robot
             dx = abs(closest_point.x() - new_position_col[0])
@@ -331,17 +375,6 @@ class Board(QWidget):
 
         # return the amount of backtracing (0 if no collision) and the closest position that is collision free
         return sub_from_v, new_position_col
-
-    # only here to assist collision_single_tile
-    # limits a value to a max and a min
-    @staticmethod
-    def limit(value, min_limit, max_limit):
-        if value > max_limit:
-            return max_limit
-        elif value < min_limit:
-            return min_limit
-        else:
-            return value
 
     def timerEvent(self, event):
         """Task 1: Every tick the servers sends position data to each robot.
@@ -385,7 +418,7 @@ class Board(QWidget):
 
     # TODO this is just a frame implementation.
     def create_bonk_message(self, collision):
-        print('hi')
+        print('B O N K')
 
         data = None
         return SensorData(SensorData.BONK_STRING, data, self.time_stamp)
@@ -397,7 +430,12 @@ class Board(QWidget):
 
     def create_vision_message(self, robot):
 
+        # list of wall object tuples:
+        # ((xpos, ypos), type, distance)
         board_data = self.calculate_vision_board(robot)
+
+        # list of robot object tuples:
+        # ((xpos, ypos), distance)
         robot_data = self.calculate_vision_robots(robot)
         data = (board_data, robot_data)
 
