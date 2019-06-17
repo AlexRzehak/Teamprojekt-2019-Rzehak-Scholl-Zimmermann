@@ -5,7 +5,7 @@ from PyQt5.QtCore import Qt, QPoint, QBasicTimer
 from PyQt5.QtGui import QPainter, QColor, QBrush, QPen, QVector2D
 from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow
 
-from Movement import FollowMovement, RandomTargetMovement
+from Movement import FollowMovement, RandomTargetMovement, AvoidMovement, SimpleAvoidMovement
 from Robot import BaseRobot, ThreadRobot, SensorData
 import Utils
 
@@ -23,7 +23,6 @@ class Game(QMainWindow):
     def initUI(self):
         self.board = Board(self)
         self.setCentralWidget(self.board)
-
         # setting up Window
         y_offset = (1080 - FIELD_SIZE) / 2
         self.setGeometry(300, y_offset, FIELD_SIZE, FIELD_SIZE)
@@ -63,20 +62,20 @@ class Board(QWidget):
         RandomTargetMovement movement functions.
         """
 
-        pos1 = (500, 500, 90, 0, 0)
-        mv1 = RandomTargetMovement()
+        pos1 = (500, 500, 40, 0, 0)
+        mv1 = SimpleAvoidMovement()
         self.construct_robot(TILE_SIZE * 4, mv1, 15, 15, pos1, alert_flag=True)
 
-        pos2 = (45, 45, 0, 0, 0)
+        pos2 = (700, 100, 0, 0, 0)
         mv2 = FollowMovement(0)
-        self.construct_robot(TILE_SIZE * 3, mv2, 15, 15, pos2, alert_flag=True)
+        self.construct_robot(TILE_SIZE * 3, mv2, 15, 5, pos2, alert_flag=True)
 
         pos3 = (965, 35, 240, 0, 0)
-        mv3 = FollowMovement(1)
+        mv3 = FollowMovement(0)
         self.construct_robot(TILE_SIZE * 2, mv3, 15, 15, pos3, alert_flag=True)
 
         pos4 = (500, 970, 240, 0, 0)
-        mv4 = FollowMovement(2)
+        mv4 = FollowMovement(0)
         self.construct_robot(TILE_SIZE * 1, mv4, 15, 15, pos4, alert_flag=True)
 
     # a more complex construction method is needed
