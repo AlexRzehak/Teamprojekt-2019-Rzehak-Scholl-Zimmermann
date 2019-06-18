@@ -36,7 +36,7 @@ class Board(QWidget):
         self.point = (500, 250)
         self.radius = 20
         self.angle = 0
-        self.fov = 270
+        self.fov = 90
         self.field = np.zeros([100, 100])
         self.robots = []
         self.robots_shown = []
@@ -63,17 +63,15 @@ class Board(QWidget):
         self.robots = [r1, r2, r3, r4, r5]
 
     def fov_obstacles(self):
-        # array = np.ones([100, 100])
-        array = np.zeros([100, 100])
-        array[:, 1] = 1
+        array = np.ones([100, 100])
+        # array = np.zeros([100, 100])
+        # array[:, 1] = 1
 
         obst_list = Utils.generate_obstacle_list(array, 100)
-        print(obst_list)
         points = obst_list * 10 + 5
-        diffs, dists = Utils.calculate_angles(points, self.point,
-                                              self.angle, self.fov)
+        diffs, _ = Utils.calculate_angles(points, self.point,
+                                          self.angle, self.fov)
 
-        print(diffs)
         for pos, dif in zip(obst_list, diffs):
             if dif <= 0:
                 x, y = pos

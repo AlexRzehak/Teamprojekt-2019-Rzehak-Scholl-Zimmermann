@@ -2,7 +2,7 @@ import sys
 import math
 
 from PyQt5.QtCore import Qt, QPoint, QBasicTimer
-from PyQt5.QtGui import QPainter, QColor, QBrush, QPen, QVector2D
+from PyQt5.QtGui import QPainter, QColor, QBrush, QPen
 from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow
 
 from Movement import FollowMovement, RandomTargetMovement
@@ -39,7 +39,11 @@ class Board(QWidget):
         super().__init__(parent)
 
         self.obstacleArray = Utils.create_example_array(Board.TileCount)
-        print(self.obstacleArray)
+
+        # Create an additional obstacle list from array
+        # storing the position values of every obstacle.
+        # Since we don't change the obstacleArray,
+        # this call is only needed once.
         self.obstacle_list = Utils.generate_obstacle_list(
             self.obstacleArray, Board.TileCount)
 
@@ -59,8 +63,7 @@ class Board(QWidget):
         self.timer.start(Board.RefreshSpeed, self)
 
     def create_example_robots(self):
-        """Task 4: Use the FollowMovement and
-        RandomTargetMovement movement functions.
+        """Here, you can implement the scenario on the board.
         """
 
         pos1 = (500, 500, 90, 0, 0)
@@ -79,11 +82,13 @@ class Board(QWidget):
         mv4 = FollowMovement(2)
         self.construct_robot(TILE_SIZE * 1, mv4, 15, 15, pos4, alert_flag=True)
 
-    # a more complex construction method is needed
     def construct_robot(self, radius, movement_funct, a_max, a_alpha_max,
-                        position, alert_flag=False):
+                        position, fov_angle=90, alert_flag=False):
+        """Create a new robot with given parameters and add it to the board.
+        """
 
-        base_robot = BaseRobot(radius, a_max, a_alpha_max)
+        # We also need to set the fov_angle now.
+        base_robot = BaseRobot(radius, a_max, a_alpha_max, fov_angle)
         thread_robo = ThreadRobot(base_robot, movement_funct)
         data_robot = DataRobot(base_robot, thread_robo)
         if alert_flag:
@@ -174,15 +179,23 @@ class Board(QWidget):
         qp.drawEllipse(center, 2, 2)
 
     def calculate_vision_board(self, robot):
+        """Calculate a list of all obejcts seen by a robot.
+        The objects are reduced to their center points for this calculation.
+        Returns a list of tuple values for obejcts seen:
+        (index in obstacle_Array, obstacle type, distance from robot's center)
+        """
 
+        # get the objects representative points
         points = self.obstacle_list * 10 + 5
         point = (robot.x, robot.y)
 
+        # use calculate_angles for the maths
         diffs, dists = Utils.calculate_angles(points, point,
                                               robot.alpha, robot.fov_angle)
 
         out = []
         for obst, dif, dist in zip(self.obstacle_list, diffs, dists):
+            # if angle difference is greater zero, the obejct will not be seen
             if dif <= 0:
                 x, y = obst
                 data = (obst, self.obstacleArray[x][y], dist)
@@ -197,20 +210,45 @@ class Board(QWidget):
         return out
 
     def calculate_vision_robots(self, robot):
+        """Calculate a list of robots seen by a robot.
+        A robot (a) can be seen by robot (x) if:
+        - (a) touches (x)
+        - (a)s center is in the direct FoV-angle of (x)
+        - a point of (a)s radius is in the direct FoV-angle of (x)
+
+        For the last criteria, we check, if (a) intersects one of the rays,
+        marking the outline of the FoV.
+
+        Returns an array with entries for each robot:
+        The array index equals the robot's serial number.
+        Array entries:
+        False, if the robot can not be seen.
+        A tuple, if the robot is seen:
+        (position, distance between the robot's centers)
+        """
         point = (robot.x, robot.y)
 
+        # no robot is seen per default.
         result = [False] * len(self.robots)
         point_list = []
 
+        # robots in this list must undergo the angle-check
+        # since they don't overlap.
+        # this also stops invalid point values
+        # from being inserted in calculate_angle.
         calc_list = []
         calc_indices = []
 
         # distance-check
         for index, rb in enumerate(self.robots):
+            # for each robot, get its distance to (x) and calculate,
+            # wheather they overlap.
             pos = (rb.x, rb.y)
             check, d = Utils.overlap_check(pos, point, rb.radius, robot.radius)
+            # create a list of position and distance for EVERY robot.
             point_list.append((pos, d))
 
+            # the actual overlap-check:
             if check:
                 result[index] = (pos, d)
             # add more cases, if you want to propagate the angles as well
@@ -225,21 +263,26 @@ class Board(QWidget):
                                                robot.alpha, robot.fov_angle)
 
         for index, dif in zip(calc_indices, angles):
+            # if the difference value is positive, the center is not seen.
             if dif <= 0:
                 result[index] = point_list[index]
 
         # ray-check
+        # calculate the two border rays of the fov
         ray1 = Utils.vector_from_angle(robot.alpha - robot.fov_angle/2)
         ray2 = Utils.vector_from_angle(robot.alpha + robot.fov_angle/2)
 
         for index, val in enumerate(result):
+            # only check robots that are not already seen
             if not val:
                 rb = self.robots[index]
                 circle = (rb.x, rb.y, rb.radius)
+                # again, python helps us out!
                 if (Utils.ray_check(point, ray1, circle) or
                         Utils.ray_check(point, ray2, circle)):
                     result[index] = point_list[index]
 
+        # now the list is complete
         return result
 
     def calculate_robot(self, poll, robot):
@@ -377,7 +420,8 @@ class Board(QWidget):
         return sub_from_v, new_position_col
 
     def timerEvent(self, event):
-        """Task 1: Every tick the servers sends position data to each robot.
+        """The game's main loop.
+        Called every tick by active timer attribute of the board.
         """
         # TODO use delta-time to interpolate visuals
 
@@ -390,8 +434,6 @@ class Board(QWidget):
             #     m = self.create_bonk_message(collision)
             #     robot.send_sensor_data(m)
 
-        # Task 3: Every 10th tick,
-        # the server tells every robot the position of every robot.
         if self.time_stamp % 10 == 0:
 
             m = self.create_alert_message()
@@ -399,6 +441,7 @@ class Board(QWidget):
                 if robot.alert_flag:
                     robot.send_sensor_data(m)
 
+        # Task 2: Now also send vision messages each tick.
         for robot in self.robots:
             v = self.create_vision_message(robot)
             robot.send_sensor_data(v)
@@ -429,6 +472,7 @@ class Board(QWidget):
         return SensorData(SensorData.POSITION_STRING, data, self.time_stamp)
 
     def create_vision_message(self, robot):
+        "New message type for FoV-data of a robot."
 
         # list of wall object tuples:
         # ((xpos, ypos), type, distance)
@@ -437,8 +481,8 @@ class Board(QWidget):
         # list of robot object tuples:
         # ((xpos, ypos), distance)
         robot_data = self.calculate_vision_robots(robot)
-        data = (board_data, robot_data)
 
+        data = (board_data, robot_data)
         return SensorData(SensorData.VISION_STRING, data, self.time_stamp)
 
     @staticmethod
@@ -483,6 +527,7 @@ class DataRobot(BaseRobot):
         self.serial_number = DataRobot.NextSerialNumber
         DataRobot.NextSerialNumber += 1
 
+        # Only some robots should receive an alert message.
         self.alert_flag = False
 
         self.thread_robot = thread_robot
