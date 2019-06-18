@@ -668,7 +668,7 @@ class RunMovement(Movement):
     @staticmethod
     def set_delta_alpha(obj_type, distance, threshold, obj_angle, turn_direction, v_alpha, threat_angle, threat_turn_direction):
         # set delta_alpha based on obstacle and threat
-        absolute_delta_alpha = 10
+        absolute_delta_alpha = 20
         if obj_type == "wall":
             if distance <= threshold and turn_direction == "right":
                 delta_alpha = absolute_delta_alpha
@@ -684,9 +684,9 @@ class RunMovement(Movement):
         smoothifier= (180 - threat_angle)/180
         if distance > threshold:
             if threat_turn_direction == "right":
-                delta_alpha = 45 * smoothifier
+                delta_alpha = 20 * smoothifier
             elif threat_turn_direction == "left":
-                delta_alpha = - 45 * smoothifier
+                delta_alpha = - 20 * smoothifier
             elif threat_turn_direction == "none":
                 delta_alpha = 0
 
@@ -737,3 +737,114 @@ class RunMovement(Movement):
             print("a: " + str(a))
             print("a_alpha: " + str(a_alpha))
             print("-------------------------")
+# ---------------------------------------------------------------------------------------------------------
+
+
+class ChaseMovement(Movement):
+    def vision(self, data, robot):
+        robot.destination = ChaseMovement.search(data)
+        return robot.a, robot.a_alpha
+
+    def position(self, data, robot):
+        x, y, alpha, v, v_alpha, = data
+        target_bot = robot.destination
+        print(target_bot)
+        if type(target_bot) == bool:
+            a = 0
+            if v_alpha < robot.a_alpha_max:
+                a_alpha = 1
+            elif v_alpha >= robot.a_alpha_max:
+                a_alpha = 0
+        else:
+            a, a_alpha = ChaseMovement.position_destination_robot(self, data, robot)
+            robot.destination = None
+
+        return a, a_alpha
+
+    @staticmethod
+    def search(array_tuple):
+        print("searching")
+        robot_array = array_tuple[1]
+        found_bot = robot_array[0]
+        print("Found: " + str(found_bot))
+        return found_bot
+
+        significant_object = array_tuple[type_of_obj][index_of_obj]
+        # print("significant_object = " + str(significant_object))
+        return significant_object
+
+    def position_destination_robot(self, data, robot):
+        x, y, alpha, v, v_alpha = data
+
+        # setting the robots destination
+        if not robot.destination:
+            destination_x = x
+            destination_y = y
+        else:
+            destination_x = robot.destination[0][0]
+            destination_y = robot.destination[0][1]
+
+        # calculating angle between the velocity vector
+        # and the destination vector
+        alpha = alpha % 360
+        radian = (alpha / 180 * math.pi)
+        if v == 0:
+            v = 0.00001
+
+        # calculating movement vector
+        velocity_vector_x = (v * math.sin(radian))
+        velocity_vector_y = - (v * math.cos(radian))
+        velocity_vector_magnitude = math.sqrt(
+            velocity_vector_x ** 2 + velocity_vector_y ** 2)
+
+        # calculating vector between robot and destination
+        destination_vector_x = destination_x - x
+        destination_vector_y = destination_y - y
+        destination_vector_magnitude = math.sqrt(
+            destination_vector_x ** 2 + destination_vector_y ** 2)
+
+        # calculating the value of the angle_change needed
+        vector_multiplication = (velocity_vector_x * destination_vector_x +
+                                 velocity_vector_y * destination_vector_y)
+        magnitude_multiplication = velocity_vector_magnitude * destination_vector_magnitude
+        destination_alpha = math.acos(
+            vector_multiplication / magnitude_multiplication) - 0.01
+        destination_alpha_degree = (destination_alpha * 180 / math.pi) % 360
+
+        # determining direction based on sign of the vectors cross product
+        cross_product = FollowMovement.cross_product(
+            (velocity_vector_x, velocity_vector_y),
+            (destination_vector_x, destination_vector_y))
+        if cross_product > 0:
+            delta_alpha = destination_alpha_degree
+            direction = "right"
+        elif cross_product < 0:
+            delta_alpha = - destination_alpha_degree
+            direction = "left"
+        elif cross_product == 0:
+            delta_alpha = destination_alpha_degree
+            direction = "None"
+
+        # setting a to accelerate to a speed of 10
+        if v <= 10:
+            a = 1
+        else:
+            a = 0
+        # setting a_alpha values
+        a_alpha_max = robot.a_alpha_max
+        if direction == "right":
+            if delta_alpha >= a_alpha_max + v_alpha:
+                a_alpha = a_alpha_max
+            elif delta_alpha < a_alpha_max + v_alpha:
+                a_alpha = delta_alpha - v_alpha
+
+        elif direction == "left":
+            if abs(delta_alpha) >= abs(a_alpha_max - v_alpha):
+                a_alpha = - a_alpha_max
+            elif abs(delta_alpha) < abs(a_alpha_max - v_alpha):
+                a_alpha = -(abs(delta_alpha)) + abs(v_alpha)
+
+        if direction == "none":
+            a_alpha = 0.01
+
+        return a, a_alpha

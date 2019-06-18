@@ -5,7 +5,7 @@ from PyQt5.QtCore import Qt, QPoint, QBasicTimer
 from PyQt5.QtGui import QPainter, QColor, QBrush, QPen, QVector2D
 from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow
 
-from Movement import FollowMovement, RandomTargetMovement, SimpleAvoidMovement, RunMovement
+from Movement import FollowMovement, RandomTargetMovement, SimpleAvoidMovement, RunMovement, ChaseMovement
 from Robot import BaseRobot, ThreadRobot, SensorData
 import Utils
 
@@ -67,16 +67,16 @@ class Board(QWidget):
         self.construct_robot(TILE_SIZE * 4, mv1, 15, 15, pos1, alert_flag=True)
 
         pos2 = (700, 100, 0, 0, 0)
-        mv2 = FollowMovement(0)
+        mv2 = ChaseMovement()
         self.construct_robot(TILE_SIZE * 3, mv2, 15, 5, pos2, alert_flag=True)
 
-        """pos3 = (965, 35, 240, 0, 0)
+        pos3 = (100, 700, 240, 0, 0)
         mv3 = FollowMovement(0)
         self.construct_robot(TILE_SIZE * 2, mv3, 15, 15, pos3, alert_flag=True)
 
-        pos4 = (500, 970, 240, 0, 0)
+        pos4 = (700, 700, 240, 0, 0)
         mv4 = FollowMovement(0)
-        self.construct_robot(TILE_SIZE * 1, mv4, 15, 15, pos4, alert_flag=True)"""
+        self.construct_robot(TILE_SIZE * 1, mv4, 15, 15, pos4, alert_flag=True)
 
     # a more complex construction method is needed
     def construct_robot(self, radius, movement_funct, a_max, a_alpha_max,
