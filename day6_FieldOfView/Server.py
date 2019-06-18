@@ -1,5 +1,6 @@
 import sys
 import math
+from functools import partial
 
 from PyQt5.QtCore import Qt, QPoint, QBasicTimer
 from PyQt5.QtGui import QPainter, QColor, QBrush, QPen
@@ -55,17 +56,20 @@ class Board(QWidget):
         # A list of DataRobots
         self.robots = []
 
-        self.create_example_robots()
+        self.collision_scenarios = dict()
+
+        self.create_scenario()
 
         for robot in self.robots:
             robot.start()
 
         self.timer.start(Board.RefreshSpeed, self)
 
-    def create_example_robots(self):
+    def create_scenario(self):
         """Here, you can implement the scenario on the board.
         """
 
+        # First add the robots.
         pos1 = (500, 500, 90, 0, 0)
         mv1 = RandomTargetMovement()
         self.construct_robot(TILE_SIZE * 4, mv1, 15, 15, pos1, alert_flag=True)
@@ -81,6 +85,9 @@ class Board(QWidget):
         pos4 = (500, 970, 240, 0, 0)
         mv4 = FollowMovement(2)
         self.construct_robot(TILE_SIZE * 1, mv4, 15, 15, pos4, alert_flag=True)
+
+        # Then add scenario recipes.
+        self.create_catch_recipe(0, [3, 1])
 
     def construct_robot(self, radius, movement_funct, a_max, a_alpha_max,
                         position, fov_angle=90, alert_flag=False):
@@ -177,6 +184,74 @@ class Board(QWidget):
         qp.setBrush(Qt.white)
         # drawing small circle
         qp.drawEllipse(center, 2, 2)
+
+    def create_catch_recipe(self, fugative, hunters):
+        """Adds a new concrete scenario recipe.
+        If fugative is caught, teleport catcher away.
+        """
+
+        # TODO make abstract with extrenal callee
+
+        def callee(hunter, board):
+            fbot = board.robots[fugative]
+            fpos = (fbot.x, fbot.y)
+            hbot = board.robots[hunter]
+            board.teleport_furthest_corner(fpos, hbot)
+
+        for h in hunters:
+            f = partial(callee, h)
+            self.collision_scenarios[(fugative, h)] = f
+            # self.collision_scenarios[(h, fugative)] = f
+
+    def perform_collision_scenario(self, col_tuple):
+        """Collision scenario handler.
+        Looks if a collision scenario occured and performs the actions needed.
+        """
+        if col_tuple in self.collision_scenarios:
+            self.collision_scenarios[col_tuple](self)
+
+    def teleport_furthest_corner(self, point, robot):
+        """Teleports the robot to a position in the corner
+        with the largest distance from point.
+        """
+
+        # TODO make less ugly
+
+        # first free pixel in every corner
+        corner1 = (TILE_SIZE, TILE_SIZE)
+        corner2 = (FIELD_SIZE - TILE_SIZE - 1, TILE_SIZE)
+        corner3 = (FIELD_SIZE - TILE_SIZE - 1, FIELD_SIZE - TILE_SIZE - 1)
+        corner4 = (TILE_SIZE, FIELD_SIZE - TILE_SIZE - 1)
+
+        rad = robot.radius
+        pos1 = (corner1[0] + rad + 1, corner1[1] + rad + 1)
+        pos2 = (corner2[0] - rad - 1, corner2[1] + rad + 1)
+        pos3 = (corner3[0] - rad - 1, corner3[1] - rad - 1)
+        pos4 = (corner4[0] + rad + 1, corner4[1] - rad - 1)
+
+        positions = [pos1, pos2, pos3, pos4]
+
+        d = 0
+        p = -1
+
+        for i in range(4):
+            dist = Utils.distance(point, positions[i])
+            if dist > d:
+                d = dist
+                p = i
+
+        position = (robot.x, robot.y, robot.alpha, robot.v, robot.v_alpha)
+
+        if p == 0:
+            position = (pos1[0], pos1[1], 135, 0, 0)
+        elif p == 1:
+            position = (pos2[0], pos2[1], 225, 0, 0)
+        elif p == 2:
+            position = (pos3[0], pos3[1], 315, 0, 0)
+        elif p == 3:
+            position = (pos4[0], pos4[1], 45, 0, 0)
+
+        robot.place_robot(*position)
 
     def calculate_vision_board(self, robot):
         """Calculate a list of all obejcts seen by a robot.
@@ -419,6 +494,22 @@ class Board(QWidget):
         # return the amount of backtracing (0 if no collision) and the closest position that is collision free
         return sub_from_v, new_position_col
 
+    # TODO this should not exist
+    def noob_collision(self):
+        s = len(self.robots)
+        for i in range(s):
+            for j in range(s):
+                if not i == j:
+                    bot1 = self.robots[i]
+                    bot2 = self.robots[j]
+                    c1 = (bot1.x, bot1.y)
+                    r1 = (bot1.radius)
+                    c2 = (bot2.x, bot2.y)
+                    r2 = (bot2.radius)
+                    check, _ = Utils.overlap_check(c1, c2, r1, r2)
+                    if check:
+                        self.perform_collision_scenario((i, j))
+
     def timerEvent(self, event):
         """The game's main loop.
         Called every tick by active timer attribute of the board.
@@ -440,6 +531,9 @@ class Board(QWidget):
             for robot in self.robots:
                 if robot.alert_flag:
                     robot.send_sensor_data(m)
+
+        # TODO replace
+        self.noob_collision()
 
         # Task 2: Now also send vision messages each tick.
         for robot in self.robots:
