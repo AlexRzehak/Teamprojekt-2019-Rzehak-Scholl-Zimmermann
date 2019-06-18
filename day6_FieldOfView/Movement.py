@@ -308,7 +308,8 @@ class SimpleAvoidMovement(Movement):
 
         # getting information about angle and direction
         turn_direction = SimpleAvoidMovement.calculate_direction(object_vector, velocity_vector)
-        delta_alpha = SimpleAvoidMovement.set_delta_alpha(obj_type, obj_distance, threshold, obj_angle, turn_direction, v_alpha)
+        delta_alpha = SimpleAvoidMovement.set_delta_alpha(obj_type, obj_distance,
+                                                          threshold, obj_angle, turn_direction, v_alpha)
 
         # setting a values for a and a_alpha
         a = SimpleAvoidMovement.set_acceleration(v, v_max)
@@ -329,7 +330,6 @@ class SimpleAvoidMovement(Movement):
         robot_multiplier = 1
 
         for i in range(len(obstacle_array)):
-            # print("obstacle " + str(i) + " distance = " + str(obstacle_array[i][2]))
             obj_distance = obstacle_array[i][2]
             if obj_distance < significance and obj_distance:
                 significance = obj_distance
@@ -338,18 +338,13 @@ class SimpleAvoidMovement(Movement):
 
         for i in range(len(robot_array)):
             if type(robot_array[i]) == tuple:
-                # print("robot " + str(i) + " distance = " + str(robot_array[i][1]))
                 obj_significance = robot_array[i][1] * robot_multiplier
                 if obj_significance < significance and obj_significance > 0:
                     significance = obj_significance
-                    # print(significance)
                     index_of_obj = i
                     type_of_obj = 1
-            # else:
-            #    print(f"robot {i} not found")
 
         significant_object = array_tuple[type_of_obj][index_of_obj]
-        # print("significant_object = " + str(significant_object))
         return significant_object
 
     @staticmethod
@@ -368,10 +363,18 @@ class SimpleAvoidMovement(Movement):
         vector_multiplication = (velocity_vector_x * object_vector_x +
                                  velocity_vector_y * object_vector_y)
         magnitude_multiplication = velocity_vector_magnitude * object_vector_magnitude
+
+        if vector_multiplication / magnitude_multiplication > 1:
+            ratio = 1
+        elif vector_multiplication / magnitude_multiplication < -1:
+            ratio = -1
+        else:
+            ratio = vector_multiplication / magnitude_multiplication
+
         if magnitude_multiplication == 0:
             obj_alpha = 0
         else:
-            obj_alpha = math.acos(vector_multiplication / magnitude_multiplication)
+            obj_alpha = math.acos(ratio)
         obj_angle = (obj_alpha * 180 / math.pi) % 360
         return obj_angle
 
@@ -404,7 +407,7 @@ class SimpleAvoidMovement(Movement):
         delta_alpha_per_unit = abs(robot.a_alpha_max / v_max)
         turn_distance = (delta_alpha + abs(v_alpha)) * delta_alpha_per_unit
         threshold = turn_distance + 2*robot.radius + obj_r
-        # prototyping only
+        # post processing
         threshold = threshold / 1.5
         return threshold
 
@@ -473,7 +476,8 @@ class SimpleAvoidMovement(Movement):
         return a_alpha
 
     @staticmethod
-    def print_info(boolean,velocity_vector, object_vector, threshold, turn_direction, delta_alpha, a, a_alpha, obj_distance, obj_angle, robot):
+    def print_info(boolean,velocity_vector, object_vector, threshold, turn_direction, delta_alpha, a, a_alpha,
+                   obj_distance, obj_angle, robot):
         if boolean:
             print("Object: " + str(robot.destination))
             print("Vv: " + str(velocity_vector))
@@ -486,7 +490,6 @@ class SimpleAvoidMovement(Movement):
             print("a: " + str(a))
             print("a_alpha: " + str(a_alpha))
             print("-------------------------")
-# ---------------------------------------------------------------------------------------------------------------------
 
 
 class RunMovement(Movement):
@@ -666,7 +669,8 @@ class RunMovement(Movement):
         return direction
 
     @staticmethod
-    def set_delta_alpha(obj_type, distance, threshold, obj_angle, turn_direction, v_alpha, threat_angle, threat_turn_direction):
+    def set_delta_alpha(obj_type, distance, threshold, obj_angle, turn_direction, v_alpha,
+                        threat_angle, threat_turn_direction):
         # set delta_alpha based on obstacle and threat
         absolute_delta_alpha = 20
         if obj_type == "wall":
@@ -722,25 +726,9 @@ class RunMovement(Movement):
 
         return a_alpha
 
-    @staticmethod
-    def print_info(boolean, velocity_vector, object_vector, threshold, turn_direction, delta_alpha, a, a_alpha,
-                   obj_distance, obj_angle, robot):
-        if boolean:
-            print("Object: " + str(robot.destination))
-            print("Vv: " + str(velocity_vector))
-            print("Ov: " + str(object_vector))
-            print("obj_angle: " + str(obj_angle))
-            print("distance: " + str(obj_distance))
-            print("threshold: " + str(threshold))
-            print("turn_direction: " + str(turn_direction))
-            print("delta_alpha: " + str(delta_alpha))
-            print("a: " + str(a))
-            print("a_alpha: " + str(a_alpha))
-            print("-------------------------")
-# ---------------------------------------------------------------------------------------------------------
-
 
 class ChaseMovement(Movement):
+
     def vision(self, data, robot):
         robot.destination = ChaseMovement.search(data)
         return robot.a, robot.a_alpha
@@ -748,7 +736,6 @@ class ChaseMovement(Movement):
     def position(self, data, robot):
         x, y, alpha, v, v_alpha, = data
         target_bot = robot.destination
-        print(target_bot)
         if type(target_bot) == bool:
             a = 0
             if v_alpha < robot.a_alpha_max:
@@ -763,15 +750,10 @@ class ChaseMovement(Movement):
 
     @staticmethod
     def search(array_tuple):
-        print("searching")
         robot_array = array_tuple[1]
         found_bot = robot_array[0]
-        print("Found: " + str(found_bot))
         return found_bot
 
-        significant_object = array_tuple[type_of_obj][index_of_obj]
-        # print("significant_object = " + str(significant_object))
-        return significant_object
 
     def position_destination_robot(self, data, robot):
         x, y, alpha, v, v_alpha = data
