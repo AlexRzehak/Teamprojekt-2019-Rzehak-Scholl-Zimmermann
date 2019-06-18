@@ -434,7 +434,7 @@ class Board(QWidget):
                     res, d = Utils.overlap_check(
                         (robot1.x, robot1.y), (robot2.x, robot2.y),
                         robot1.radius, robot2.radius)
-                    if res == True:
+                    if res:
                         # perform_collision_scenario(self.robots.index(robot1), self.robots.index(robot2))
         return
 
