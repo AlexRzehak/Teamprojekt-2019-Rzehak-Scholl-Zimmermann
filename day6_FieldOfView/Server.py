@@ -306,7 +306,7 @@ class Board(QWidget):
         new_v_alpha = robot.v_alpha + a_alpha
 
         # calculates the new position - factors in collisions
-        new_position_col = self.calculate_collision(robot, new_v, new_v_alpha)
+        new_position_col = self.calculate_collision_walls(robot, new_v, new_v_alpha)
 
         # re-place the robot on the board
         Board.place_robot(robot, *new_position_col)
@@ -319,27 +319,14 @@ class Board(QWidget):
         radian = ((new_alpha - 90) / 180 * math.pi)
 
         # calculates x coordinate, only allows values inside walls
-        new_x = (robot.x + new_v * math.cos(radian))
-        if new_x < TILE_SIZE:
-            new_x = TILE_SIZE
-        if new_x > 99 * TILE_SIZE:
-            new_x = 99 * TILE_SIZE
-        else:
-            new_x = new_x
+        new_x = Utils.limit(robot.x + new_v * math.cos(radian), 0, FIELD_SIZE)
 
         # calculates y coordinate, only allows values inside walls
-        new_y = (robot.y + new_v * math.sin(radian))
-        if new_y < TILE_SIZE:
-            new_y = TILE_SIZE
-        if new_y > 99 * TILE_SIZE:
-            new_y = 99 * TILE_SIZE
-        else:
-            new_y = new_y
-
+        new_y = Utils.limit(robot.y + new_v * math.sin(radian), 0 , FIELD_SIZE)
         new_position = (new_x, new_y, new_alpha, new_v, new_v_alpha)
         return new_position
 
-    def calculate_collision(self, robot, new_v, new_v_alpha):
+    def calculate_collision_walls(self, robot, new_v, new_v_alpha):
         """Task 2: Here the collision with obstacles is calculated."""
 
         # calculates the new position without factoring in any collisions
@@ -348,19 +335,27 @@ class Board(QWidget):
 
         # loop continues until the current position doesn't produce any collision
         collided = False
+
+        # calculate the boundaries of the area where tiles will be tested
+        robot_reach = robot.radius + new_v
+        leftmost_tile = Utils.limit(int((robot.x - robot_reach) / TILE_SIZE), 0, Board.TileCount)
+        rightmost_tile = Utils.limit(int((robot.x + robot_reach) / TILE_SIZE) + 1, 0, Board.TileCount)
+        upmost_tile = Utils.limit(int((robot.y - robot_reach) / TILE_SIZE), 0, Board.TileCount)
+        downmost_tile = Utils.limit(int((robot.y + robot_reach) / TILE_SIZE) + 1, 0, Board.TileCount)
+
         while True:
             max_sub = 0
 
             # tests all 100x100 tiles in the array for collision
-            for tile_x in range(Board.TileCount):
-                for tile_y in range(Board.TileCount):
+            for tile_x in range(leftmost_tile, rightmost_tile):
+                for tile_y in range(upmost_tile, downmost_tile):
                     if self.obstacleArray[tile_x][tile_y] != 0:
 
-                        # takes the position where it doesn't collide and the amount it backtraced
+                        # takes the position where it doesn't collide and the amount it backtracked
                         sub_from_v, current_position_col = self.collision_single_tile(current_testing_position,
                                                                                       robot, tile_x, tile_y)
 
-                        # saves position with the most backtracing (the tile where it was in deepest)
+                        # saves position with the most backtracking (the tile where it was in deepest)
                         if sub_from_v > max_sub:
                             max_sub = sub_from_v
                             final_position_col = current_position_col
@@ -383,11 +378,11 @@ class Board(QWidget):
             final_position_col = position_no_col
         return final_position_col
 
-    # checks if the robot collides with a specific tile
     def collision_single_tile(self, new_position, robot, tile_x, tile_y):
+        # checks if the robot collides with a specific tile
+
         # calc the coordinates of the given tile
-        tile_left = tile_x * TILE_SIZE
-        tile_upper = tile_y * TILE_SIZE
+        tile_origin = QPoint(tile_x * TILE_SIZE, tile_y * TILE_SIZE)
 
         # loop terminates when there is no collision
         sub_from_v = 0
@@ -395,29 +390,53 @@ class Board(QWidget):
             # recalc the position with the adjusted v
             new_position_col = self.calculate_position(
                 robot, new_position[3] - sub_from_v, new_position[4])
+            robot_center = QPoint(new_position_col[0], new_position_col[1])
 
-            # calc the closest point in the rectangle to the robot
-            closest_point = QPoint(Utils.limit(new_position_col[0], tile_left, tile_left + TILE_SIZE),
-                                   Utils.limit(new_position_col[1], tile_upper, tile_upper + TILE_SIZE))
-
-            # calc the x and y distance from the closest point to the center of the robot
-            dx = abs(closest_point.x() - new_position_col[0])
-            dy = abs(closest_point.y() - new_position_col[1])
-
-            # calc the actual distance
-            distance = math.sqrt(dx ** 2 + dy ** 2)
-
-            # distance >= robot.radius means no collision
-            # sub_from_v >= new_position[4] means v <= 0
-            if distance >= robot.radius:  # or sub_from_v >= new_position[4]:
+            if Utils.check_collision_circle_rect(robot_center, robot.radius,
+                                                 tile_origin, TILE_SIZE, TILE_SIZE):
+                sub_from_v += 1
+            else:
                 break
 
-            # if there is a collision reduce v by one and try again (backtracing)
-            else:
-                sub_from_v += 1
+        """
+        # loop terminates when there is no collision
+        lower = 0
+        upper = new_position[3]
+        robot_center = QPoint(new_position[0], new_position[1])
+        tile_origin = QPoint(tile_x * TILE_SIZE, tile_y * TILE_SIZE)
+        if self.check_collision_circle_rect(robot_center, robot.radius,
+                                            tile_origin, TILE_SIZE, TILE_SIZE):
+            while upper >= lower:
+                mid = int((lower + upper) / 2)
+                new_position_col = self.calculate_position(
+                    robot, mid, new_position[4])
+                robot_center = QPoint(new_position_col[0], new_position_col[1])
+                # if there is a collision v has to be lower than mid
+                if self.check_collision_circle_rect(robot_center, robot.radius,
+                                                    tile_origin, TILE_SIZE, TILE_SIZE):
+                    upper = mid - 1
+                # if there is no collision v has to be higher than mid
+                else:
+                    lower = mid + 1
+            # return the amount of backtracking (0 if no collision) and the closest position that is collision free
+            return new_position[3] - lower, new_position_col
+        else:
+            return 0, new_position
+        """
 
         # return the amount of backtracing (0 if no collision) and the closest position that is collision free
         return sub_from_v, new_position_col
+
+    def check_collision_other_robots(self):
+        for robot1 in self.robots:
+            for robot2 in self.robots:
+                if robot1 != robot2:
+                    res, d = Utils.overlap_check(
+                        (robot1.x, robot1.y), (robot2.x, robot2.y),
+                        robot1.radius, robot2.radius)
+                    if res == True:
+                        # perform_collision_scenario(self.robots.index(robot1), self.robots.index(robot2))
+        return
 
     def timerEvent(self, event):
         """The game's main loop.
@@ -433,6 +452,8 @@ class Board(QWidget):
             # if collision:
             #     m = self.create_bonk_message(collision)
             #     robot.send_sensor_data(m)
+
+        self.check_collision_other_robots()
 
         if self.time_stamp % 10 == 0:
 
