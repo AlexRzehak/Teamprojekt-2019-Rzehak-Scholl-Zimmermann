@@ -494,8 +494,8 @@ class Board(QWidget):
         # return the amount of backtracing (0 if no collision) and the closest position that is collision free
         return sub_from_v, new_position_col
 
-    # TODO this should not exist
-    def noob_collision(self):
+    # TODO we might improve that function
+    def check_collision_robots(self):
         s = len(self.robots)
         for i in range(s):
             for j in range(s):
@@ -532,8 +532,8 @@ class Board(QWidget):
                 if robot.alert_flag:
                     robot.send_sensor_data(m)
 
-        # TODO replace
-        self.noob_collision()
+        # TODO we might improve that function
+        self.check_collision_robots()
 
         # Task 2: Now also send vision messages each tick.
         for robot in self.robots:
