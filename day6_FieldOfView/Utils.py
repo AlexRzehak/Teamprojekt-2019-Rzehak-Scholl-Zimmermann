@@ -113,7 +113,7 @@ def create_example_array(size: int):
         array[size - 1][x] = 2
 
     # individual Wall tiles:
-    """array[28][34] = 1
+    array[28][34] = 1
 
     array[56][50] = 1
     array[56][51] = 1
@@ -139,8 +139,14 @@ def create_example_array(size: int):
     array[70][30] = 1
     array[43][96] = 1
     array[73][56] = 1
+    #edges
+    array[6][6] = 1
+    array[6][93] = 1
+    array[93][6] = 1
+    array[93][93] = 1
+
     array[5][49] = 3
     array[0][30] = 0
-    array[99][30] = 0"""
+    array[99][30] = 0
 
     return array
