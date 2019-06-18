@@ -1,4 +1,7 @@
 import numpy as np
+import math
+
+from PyQt5.QtCore import QPoint
 
 
 def generate_obstacle_list(matrix, size):
@@ -129,7 +132,7 @@ def distance(a, b):
 
 def overlap_check(center1, center2, rad1, rad2):
     """Check if two circles overlap.
-    Return 'zero' if they have teh same center."""
+    Return 'zero' if they have the same center."""
     d_overlap = rad1 + rad2
     d = distance(center1, center2)
 
@@ -141,6 +144,23 @@ def overlap_check(center1, center2, rad1, rad2):
         res = False
 
     return res, d
+
+
+def check_collision_circle_rect(circle_center, circle_radius,
+                                rect_origin, rect_width, rect_height):
+
+    # calc the closest point in the rectangle to the robot
+    closest_point = QPoint(limit(circle_center.x(), rect_origin.x(), rect_origin.x() + rect_width - 1),
+                           limit(circle_center.y(), rect_origin.y(), rect_origin.y() + rect_height - 1))
+
+    # calc the x and y distance from the closest point to the center of the robot
+    dx = abs(closest_point.x() - circle_center.x())
+    dy = abs(closest_point.y() - circle_center.y())
+
+    # calc the actual distance
+    dist = math.sqrt(dx ** 2 + dy ** 2)
+
+    return dist < circle_radius
 
 
 def vector_from_angle(angle):
