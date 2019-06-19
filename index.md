@@ -11,3 +11,4 @@ The blog entries are used for the presentation but each entry should be able to 
 - *Week 3:* Create a [first Version of a Playing Field and Robot](/Week3.md).
 - *Week 4:* Implement [multithreading](/week4_multithreading.md).
 - *Week 5:* [Improve](/week5_smarter_bots.md) the robot's features.
+- *Week 6:* Give the robots a [Field of View](/week6_field_of_view.md).
