@@ -311,7 +311,7 @@ class Board(QWidget):
 
             # distance >= robot.radius means no collision
             # sub_from_v >= new_position[4] means v <= 0
-            if distance >= robot.radius or sub_from_v >= new_position[4]:
+            if distance >= robot.radius: # or  sub_from_v >= new_position[4]:
                 break
 
             # if there is a collision reduce v by one and try again (backtracing)
