@@ -208,7 +208,47 @@ But how are the calculations done now, exactly?
 
 ## Solution 1: PyQt5 Polygons
 Since we deal with geometry, it might be a good idea to use PyQt5's geometry functionality.
-# TODO LEANDER
+
+```python
+    def walls_in_vision(self, robot):
+        # TODO: check if objects are in vision:
+        #   if so give robot coordinates
+        objects_in_fov = []
+        robot_fov = self.calculate_fov(robot)
+        for obj in self.create_list_of_wall_centers():
+            if robot_fov.contains(obj):
+                objects_in_fov.append(obj)
+        return objects_in_fov
+
+    def create_list_of_wall_centers(self):
+        list_of_centers = []
+        for row in range(Board.TileCount):
+            for col in range(Board.TileCount):
+                if self.obstacleArray[row][col] != 0:
+                    list_of_centers.append(row * TILE_SIZE + TILE_SIZE / 2,
+                                           col * TILE_SIZE + TILE_SIZE / 2)
+        return list_of_centers
+```
+```python
+    @staticmethod
+    def calculate_fov(robot):
+        robot_center = QPoint(robot.x, robot.y)
+
+        fov_angle_radian = math.radians(ROBOT_FOV_ANGLE / 2)
+        side_length = ROBOT_FOV_RANGE / math.cos(fov_angle_radian)
+
+        left_angle = robot.alpha - ROBOT_FOV_ANGLE / 2
+        left_radian = ((left_angle - 90) / 180 * math.pi)
+        left_corner = robot_center + QPoint(math.cos(left_radian) * side_length,
+                                            math.sin(left_radian) * side_length)
+
+        right_angle = robot.alpha + ROBOT_FOV_ANGLE / 2
+        right_radian = ((right_angle - 90) / 180 * math.pi)
+        right_corner = robot_center + QPoint(math.cos(right_radian) * side_length,
+                                             math.sin(right_radian) * side_length)
+
+        return QPolygonF([robot_center, left_corner, right_corner])
+```
 
 ## Recurring Problem: Execution time
 ### This idea has some problems.<br/>For example, it proves difficult to impelement bigger FoV-Angles than 90 degrees and nearly impossible to go over 180 degrees.
