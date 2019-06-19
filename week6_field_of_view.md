@@ -950,6 +950,32 @@ class Board(QWidget):
 # Additional Features
 ## Improve Collision
 Now, that we have a new Utils file and new numpy functionality, we can as well further improve our collision management.
-# TODO LEANDER
-
+# Collision
+### Binary Search
+```python
+ def collision_single_tile(self, new_position, robot, tile_x, tile_y):
+        # checks if the robot collides with a specific tile
+        lower = 0
+        upper = new_position[3]
+        robot_center = QPoint(new_position[0], new_position[1])
+        tile_origin = QPoint(tile_x * TILE_SIZE, tile_y * TILE_SIZE)
+        if self.check_collision_circle_rect(robot_center, robot.radius,
+                                            tile_origin, TILE_SIZE, TILE_SIZE):
+            while upper >= lower:
+                mid = int((lower + upper) / 2)
+                new_position_col = self.calculate_position(
+                    robot, mid, new_position[4])
+                robot_center = QPoint(new_position_col[0], new_position_col[1])
+                # if there is a collision v has to be lower than mid
+                if self.check_collision_circle_rect(robot_center, robot.radius,
+                                                    tile_origin, TILE_SIZE, TILE_SIZE):
+                    upper = mid - 1
+                # if there is no collision v has to be higher than mid
+                else:
+                    lower = mid + 1
+            # return the amount of backtracking (0 if no collision) and the closest position that is collision free
+            return new_position[3] - lower, new_position_col
+        else:
+            return 0, new_position
+```
 ## Now our robots can look forward to a great future!
