@@ -55,12 +55,6 @@ class ThreadRobot(BaseRobot):
         # the robot will atempt to go here (x,y)
         self.destination = None
 
-        # stores coordinates of all robots
-        self.robomap = None
-
-        # stores closest robot's coordinates and distance
-        self.threat = None
-
         # TODO BONK management
         # self.bonk_flag = False
         # self.bonk_stack = None

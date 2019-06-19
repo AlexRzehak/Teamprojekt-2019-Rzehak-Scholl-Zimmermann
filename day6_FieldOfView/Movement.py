@@ -363,18 +363,20 @@ class SimpleAvoidMovement(Movement):
         vector_multiplication = (velocity_vector_x * object_vector_x +
                                  velocity_vector_y * object_vector_y)
         magnitude_multiplication = velocity_vector_magnitude * object_vector_magnitude
+        if magnitude_multiplication != 0:
+            if vector_multiplication / magnitude_multiplication > 1:
+                ratio = 1
+            elif vector_multiplication / magnitude_multiplication < -1:
+                ratio = -1
+            else:
+                ratio = vector_multiplication / magnitude_multiplication
 
-        if vector_multiplication / magnitude_multiplication > 1:
-            ratio = 1
-        elif vector_multiplication / magnitude_multiplication < -1:
-            ratio = -1
+            if magnitude_multiplication == 0:
+                obj_alpha = 0
+            else:
+                obj_alpha = math.acos(ratio)
         else:
-            ratio = vector_multiplication / magnitude_multiplication
-
-        if magnitude_multiplication == 0:
             obj_alpha = 0
-        else:
-            obj_alpha = math.acos(ratio)
         obj_angle = (obj_alpha * 180 / math.pi) % 360
         return obj_angle
 
@@ -652,6 +654,8 @@ class RunMovement(Movement):
         delta_alpha_per_unit = abs(robot.a_alpha_max / v_max)
         turn_distance = (delta_alpha + abs(v_alpha)) * delta_alpha_per_unit
         threshold = turn_distance + 2 * robot.radius + obj_r
+        # post processing
+        threshold = threshold / 1.4
         return threshold
 
     @staticmethod
@@ -753,7 +757,6 @@ class ChaseMovement(Movement):
         robot_array = array_tuple[1]
         found_bot = robot_array[0]
         return found_bot
-
 
     def position_destination_robot(self, data, robot):
         x, y, alpha, v, v_alpha = data

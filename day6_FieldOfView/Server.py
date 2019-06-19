@@ -1,11 +1,12 @@
 import sys
 import math
+from functools import partial
 
 from PyQt5.QtCore import Qt, QPoint, QBasicTimer
-from PyQt5.QtGui import QPainter, QColor, QBrush, QPen, QVector2D
+from PyQt5.QtGui import QPainter, QColor, QBrush, QPen
 from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow
 
-from Movement import FollowMovement, RandomTargetMovement, SimpleAvoidMovement, RunMovement, ChaseMovement
+from Movement import FollowMovement, RandomTargetMovement, RunMovement, ChaseMovement
 from Robot import BaseRobot, ThreadRobot, SensorData
 import Utils
 
@@ -23,6 +24,7 @@ class Game(QMainWindow):
     def initUI(self):
         self.board = Board(self)
         self.setCentralWidget(self.board)
+
         # setting up Window
         y_offset = (1080 - FIELD_SIZE) / 2
         self.setGeometry(300, y_offset, FIELD_SIZE, FIELD_SIZE)
@@ -38,7 +40,11 @@ class Board(QWidget):
         super().__init__(parent)
 
         self.obstacleArray = Utils.create_example_array(Board.TileCount)
-        print(self.obstacleArray)
+
+        # Create an additional obstacle list from array
+        # storing the position values of every obstacle.
+        # Since we don't change the obstacleArray,
+        # this call is only needed once.
         self.obstacle_list = Utils.generate_obstacle_list(
             self.obstacleArray, Board.TileCount)
 
@@ -50,39 +56,46 @@ class Board(QWidget):
         # A list of DataRobots
         self.robots = []
 
-        self.create_example_robots()
+        self.collision_scenarios = dict()
+
+        self.create_scenario()
 
         for robot in self.robots:
             robot.start()
 
         self.timer.start(Board.RefreshSpeed, self)
 
-    def create_example_robots(self):
-        """Task 4: Use the FollowMovement and
-        RandomTargetMovement movement functions.
+    def create_scenario(self):
+        """Here, you can implement the scenario on the board.
         """
 
-        pos1 = (500, 500, 0, 0, 0)
+        # First add the robots.
+        pos1 = (500, 500, 75, 0, 0)
         mv1 = RunMovement()
-        self.construct_robot(TILE_SIZE * 4, mv1, 15, 15, pos1, alert_flag=True)
+        self.construct_robot(TILE_SIZE * 4, mv1, 15, 10, pos1, alert_flag=True)
 
-        pos2 = (700, 100, 0, 0, 0)
+        pos2 = (45, 45, 0, 0, 0)
         mv2 = ChaseMovement()
-        self.construct_robot(TILE_SIZE * 3, mv2, 15, 5, pos2, alert_flag=True)
+        self.construct_robot(TILE_SIZE * 3, mv2, 15, 10, pos2, alert_flag=True)
 
-        pos3 = (100, 700, 240, 0, 0)
+        pos3 = (965, 35, 240, 0, 0)
         mv3 = FollowMovement(0)
-        self.construct_robot(TILE_SIZE * 2, mv3, 15, 15, pos3, alert_flag=True)
+        self.construct_robot(TILE_SIZE * 2, mv3, 15, 7.5, pos3, alert_flag=True)
 
-        pos4 = (700, 700, 240, 0, 0)
-        mv4 = FollowMovement(0)
+        pos4 = (300, 650, 70, 0, 0)
+        mv4 = RandomTargetMovement()
         self.construct_robot(TILE_SIZE * 1, mv4, 15, 15, pos4, alert_flag=True)
 
-    # a more complex construction method is needed
-    def construct_robot(self, radius, movement_funct, a_max, a_alpha_max,
-                        position, alert_flag=False):
+        # Then add scenario recipes.
+        self.create_catch_recipe(0, [3, 1, 2])
 
-        base_robot = BaseRobot(radius, a_max, a_alpha_max)
+    def construct_robot(self, radius, movement_funct, a_max, a_alpha_max,
+                        position, fov_angle=90, alert_flag=False):
+        """Create a new robot with given parameters and add it to the board.
+        """
+
+        # We also need to set the fov_angle now.
+        base_robot = BaseRobot(radius, a_max, a_alpha_max, fov_angle)
         thread_robo = ThreadRobot(base_robot, movement_funct)
         data_robot = DataRobot(base_robot, thread_robo)
         if alert_flag:
@@ -172,16 +185,92 @@ class Board(QWidget):
         # drawing small circle
         qp.drawEllipse(center, 2, 2)
 
-    def calculate_vision_board(self, robot):
+    def create_catch_recipe(self, fugative, hunters):
+        """Adds a new concrete scenario recipe.
+        If fugative is caught, teleport catcher away.
+        """
 
+        # TODO make abstract with extrenal callee
+
+        def callee(hunter, board):
+            fbot = board.robots[fugative]
+            fpos = (fbot.x, fbot.y)
+            hbot = board.robots[hunter]
+            board.teleport_furthest_corner(fpos, hbot)
+
+        for h in hunters:
+            f = partial(callee, h)
+            self.collision_scenarios[(fugative, h)] = f
+            # self.collision_scenarios[(h, fugative)] = f
+
+    def perform_collision_scenario(self, col_tuple):
+        """Collision scenario handler.
+        Looks if a collision scenario occured and performs the actions needed.
+        """
+        if col_tuple in self.collision_scenarios:
+            self.collision_scenarios[col_tuple](self)
+
+    def teleport_furthest_corner(self, point, robot):
+        """Teleports the robot to a position in the corner
+        with the largest distance from point.
+        """
+
+        # TODO make less ugly
+
+        # first free pixel in every corner
+        corner1 = (TILE_SIZE, TILE_SIZE)
+        corner2 = (FIELD_SIZE - TILE_SIZE - 1, TILE_SIZE)
+        corner3 = (FIELD_SIZE - TILE_SIZE - 1, FIELD_SIZE - TILE_SIZE - 1)
+        corner4 = (TILE_SIZE, FIELD_SIZE - TILE_SIZE - 1)
+
+        rad = robot.radius
+        pos1 = (corner1[0] + rad + 1, corner1[1] + rad + 1)
+        pos2 = (corner2[0] - rad - 1, corner2[1] + rad + 1)
+        pos3 = (corner3[0] - rad - 1, corner3[1] - rad - 1)
+        pos4 = (corner4[0] + rad + 1, corner4[1] - rad - 1)
+
+        positions = [pos1, pos2, pos3, pos4]
+
+        d = 0
+        p = -1
+
+        for i in range(4):
+            dist = Utils.distance(point, positions[i])
+            if dist > d:
+                d = dist
+                p = i
+
+        position = (robot.x, robot.y, robot.alpha, robot.v, robot.v_alpha)
+
+        if p == 0:
+            position = (pos1[0], pos1[1], 135, 0, 0)
+        elif p == 1:
+            position = (pos2[0], pos2[1], 225, 0, 0)
+        elif p == 2:
+            position = (pos3[0], pos3[1], 315, 0, 0)
+        elif p == 3:
+            position = (pos4[0], pos4[1], 45, 0, 0)
+
+        robot.place_robot(*position)
+
+    def calculate_vision_board(self, robot):
+        """Calculate a list of all obejcts seen by a robot.
+        The objects are reduced to their center points for this calculation.
+        Returns a list of tuple values for obejcts seen:
+        (index in obstacle_Array, obstacle type, distance from robot's center)
+        """
+
+        # get the objects representative points
         points = self.obstacle_list * 10 + 5
         point = (robot.x, robot.y)
 
+        # use calculate_angles for the maths
         diffs, dists = Utils.calculate_angles(points, point,
                                               robot.alpha, robot.fov_angle)
 
         out = []
         for obst, dif, dist in zip(self.obstacle_list, diffs, dists):
+            # if angle difference is greater zero, the obejct will not be seen
             if dif <= 0:
                 x, y = obst
                 data = (obst, self.obstacleArray[x][y], dist)
@@ -196,20 +285,45 @@ class Board(QWidget):
         return out
 
     def calculate_vision_robots(self, robot):
+        """Calculate a list of robots seen by a robot.
+        A robot (a) can be seen by robot (x) if:
+        - (a) touches (x)
+        - (a)s center is in the direct FoV-angle of (x)
+        - a point of (a)s radius is in the direct FoV-angle of (x)
+
+        For the last criteria, we check, if (a) intersects one of the rays,
+        marking the outline of the FoV.
+
+        Returns an array with entries for each robot:
+        The array index equals the robot's serial number.
+        Array entries:
+        False, if the robot can not be seen.
+        A tuple, if the robot is seen:
+        (position, distance between the robot's centers)
+        """
         point = (robot.x, robot.y)
 
+        # no robot is seen per default.
         result = [False] * len(self.robots)
         point_list = []
 
+        # robots in this list must undergo the angle-check
+        # since they don't overlap.
+        # this also stops invalid point values
+        # from being inserted in calculate_angle.
         calc_list = []
         calc_indices = []
 
         # distance-check
         for index, rb in enumerate(self.robots):
+            # for each robot, get its distance to (x) and calculate,
+            # wheather they overlap.
             pos = (rb.x, rb.y)
             check, d = Utils.overlap_check(pos, point, rb.radius, robot.radius)
+            # create a list of position and distance for EVERY robot.
             point_list.append((pos, d))
 
+            # the actual overlap-check:
             if check:
                 result[index] = (pos, d)
             # add more cases, if you want to propagate the angles as well
@@ -224,21 +338,26 @@ class Board(QWidget):
                                                robot.alpha, robot.fov_angle)
 
         for index, dif in zip(calc_indices, angles):
+            # if the difference value is positive, the center is not seen.
             if dif <= 0:
                 result[index] = point_list[index]
 
         # ray-check
+        # calculate the two border rays of the fov
         ray1 = Utils.vector_from_angle(robot.alpha - robot.fov_angle/2)
         ray2 = Utils.vector_from_angle(robot.alpha + robot.fov_angle/2)
 
         for index, val in enumerate(result):
+            # only check robots that are not already seen
             if not val:
                 rb = self.robots[index]
                 circle = (rb.x, rb.y, rb.radius)
+                # again, python helps us out!
                 if (Utils.ray_check(point, ray1, circle) or
                         Utils.ray_check(point, ray2, circle)):
                     result[index] = point_list[index]
 
+        # now the list is complete
         return result
 
     def calculate_robot(self, poll, robot):
@@ -262,7 +381,8 @@ class Board(QWidget):
         new_v_alpha = robot.v_alpha + a_alpha
 
         # calculates the new position - factors in collisions
-        new_position_col = self.calculate_collision(robot, new_v, new_v_alpha)
+        new_position_col = self.calculate_collision_walls(
+            robot, new_v, new_v_alpha)
 
         # re-place the robot on the board
         Board.place_robot(robot, *new_position_col)
@@ -275,27 +395,14 @@ class Board(QWidget):
         radian = ((new_alpha - 90) / 180 * math.pi)
 
         # calculates x coordinate, only allows values inside walls
-        new_x = (robot.x + new_v * math.cos(radian))
-        if new_x < TILE_SIZE:
-            new_x = TILE_SIZE
-        if new_x > 99 * TILE_SIZE:
-            new_x = 99 * TILE_SIZE
-        else:
-            new_x = new_x
+        new_x = Utils.limit(robot.x + new_v * math.cos(radian), 0, FIELD_SIZE)
 
         # calculates y coordinate, only allows values inside walls
-        new_y = (robot.y + new_v * math.sin(radian))
-        if new_y < TILE_SIZE:
-            new_y = TILE_SIZE
-        if new_y > 99 * TILE_SIZE:
-            new_y = 99 * TILE_SIZE
-        else:
-            new_y = new_y
-
+        new_y = Utils.limit(robot.y + new_v * math.sin(radian), 0, FIELD_SIZE)
         new_position = (new_x, new_y, new_alpha, new_v, new_v_alpha)
         return new_position
 
-    def calculate_collision(self, robot, new_v, new_v_alpha):
+    def calculate_collision_walls(self, robot, new_v, new_v_alpha):
         """Task 2: Here the collision with obstacles is calculated."""
 
         # calculates the new position without factoring in any collisions
@@ -304,19 +411,31 @@ class Board(QWidget):
 
         # loop continues until the current position doesn't produce any collision
         collided = False
+
+        # calculate the boundaries of the area where tiles will be tested
+        robot_reach = robot.radius + new_v
+        leftmost_tile = Utils.limit(
+            int((robot.x - robot_reach) / TILE_SIZE), 0, Board.TileCount)
+        rightmost_tile = Utils.limit(
+            int((robot.x + robot_reach) / TILE_SIZE) + 1, 0, Board.TileCount)
+        upmost_tile = Utils.limit(
+            int((robot.y - robot_reach) / TILE_SIZE), 0, Board.TileCount)
+        downmost_tile = Utils.limit(
+            int((robot.y + robot_reach) / TILE_SIZE) + 1, 0, Board.TileCount)
+
         while True:
             max_sub = 0
 
             # tests all 100x100 tiles in the array for collision
-            for tile_x in range(Board.TileCount):
-                for tile_y in range(Board.TileCount):
+            for tile_x in range(leftmost_tile, rightmost_tile):
+                for tile_y in range(upmost_tile, downmost_tile):
                     if self.obstacleArray[tile_x][tile_y] != 0:
 
-                        # takes the position where it doesn't collide and the amount it backtraced
+                        # takes the position where it doesn't collide and the amount it backtracked
                         sub_from_v, current_position_col = self.collision_single_tile(current_testing_position,
                                                                                       robot, tile_x, tile_y)
 
-                        # saves position with the most backtracing (the tile where it was in deepest)
+                        # saves position with the most backtracking (the tile where it was in deepest)
                         if sub_from_v > max_sub:
                             max_sub = sub_from_v
                             final_position_col = current_position_col
@@ -339,11 +458,11 @@ class Board(QWidget):
             final_position_col = position_no_col
         return final_position_col
 
-    # checks if the robot collides with a specific tile
     def collision_single_tile(self, new_position, robot, tile_x, tile_y):
+        # checks if the robot collides with a specific tile
+
         # calc the coordinates of the given tile
-        tile_left = tile_x * TILE_SIZE
-        tile_upper = tile_y * TILE_SIZE
+        tile_origin = QPoint(tile_x * TILE_SIZE, tile_y * TILE_SIZE)
 
         # loop terminates when there is no collision
         sub_from_v = 0
@@ -351,32 +470,62 @@ class Board(QWidget):
             # recalc the position with the adjusted v
             new_position_col = self.calculate_position(
                 robot, new_position[3] - sub_from_v, new_position[4])
+            robot_center = QPoint(new_position_col[0], new_position_col[1])
 
-            # calc the closest point in the rectangle to the robot
-            closest_point = QPoint(Utils.limit(new_position_col[0], tile_left, tile_left + TILE_SIZE),
-                                   Utils.limit(new_position_col[1], tile_upper, tile_upper + TILE_SIZE))
-
-            # calc the x and y distance from the closest point to the center of the robot
-            dx = abs(closest_point.x() - new_position_col[0])
-            dy = abs(closest_point.y() - new_position_col[1])
-
-            # calc the actual distance
-            distance = math.sqrt(dx ** 2 + dy ** 2)
-
-            # distance >= robot.radius means no collision
-            # sub_from_v >= new_position[4] means v <= 0
-            if distance >= robot.radius:  # or sub_from_v >= new_position[4]:
+            if Utils.check_collision_circle_rect(robot_center, robot.radius,
+                                                 tile_origin, TILE_SIZE, TILE_SIZE):
+                sub_from_v += 1
+            else:
                 break
 
-            # if there is a collision reduce v by one and try again (backtracing)
-            else:
-                sub_from_v += 1
+        """
+        # loop terminates when there is no collision
+        lower = 0
+        upper = new_position[3]
+        robot_center = QPoint(new_position[0], new_position[1])
+        tile_origin = QPoint(tile_x * TILE_SIZE, tile_y * TILE_SIZE)
+        if self.check_collision_circle_rect(robot_center, robot.radius,
+                                            tile_origin, TILE_SIZE, TILE_SIZE):
+            while upper >= lower:
+                mid = int((lower + upper) / 2)
+                new_position_col = self.calculate_position(
+                    robot, mid, new_position[4])
+                robot_center = QPoint(new_position_col[0], new_position_col[1])
+                # if there is a collision v has to be lower than mid
+                if self.check_collision_circle_rect(robot_center, robot.radius,
+                                                    tile_origin, TILE_SIZE, TILE_SIZE):
+                    upper = mid - 1
+                # if there is no collision v has to be higher than mid
+                else:
+                    lower = mid + 1
+            # return the amount of backtracking (0 if no collision) and the closest position that is collision free
+            return new_position[3] - lower, new_position_col
+        else:
+            return 0, new_position
+        """
 
         # return the amount of backtracing (0 if no collision) and the closest position that is collision free
         return sub_from_v, new_position_col
 
+    # TODO we might improve that function
+    def check_collision_robots(self):
+        s = len(self.robots)
+        for i in range(s):
+            for j in range(s):
+                if not i == j:
+                    bot1 = self.robots[i]
+                    bot2 = self.robots[j]
+                    c1 = (bot1.x, bot1.y)
+                    r1 = (bot1.radius)
+                    c2 = (bot2.x, bot2.y)
+                    r2 = (bot2.radius)
+                    check, _ = Utils.overlap_check(c1, c2, r1, r2)
+                    if check:
+                        self.perform_collision_scenario((i, j))
+
     def timerEvent(self, event):
-        """Task 1: Every tick the servers sends position data to each robot.
+        """The game's main loop.
+        Called every tick by active timer attribute of the board.
         """
         # TODO use delta-time to interpolate visuals
 
@@ -389,8 +538,6 @@ class Board(QWidget):
             #     m = self.create_bonk_message(collision)
             #     robot.send_sensor_data(m)
 
-        # Task 3: Every 10th tick,
-        # the server tells every robot the position of every robot.
         if self.time_stamp % 10 == 0:
 
             m = self.create_alert_message()
@@ -398,6 +545,10 @@ class Board(QWidget):
                 if robot.alert_flag:
                     robot.send_sensor_data(m)
 
+        # TODO we might improve that function
+        self.check_collision_robots()
+
+        # Task 2: Now also send vision messages each tick.
         for robot in self.robots:
             v = self.create_vision_message(robot)
             robot.send_sensor_data(v)
@@ -428,6 +579,7 @@ class Board(QWidget):
         return SensorData(SensorData.POSITION_STRING, data, self.time_stamp)
 
     def create_vision_message(self, robot):
+        "New message type for FoV-data of a robot."
 
         # list of wall object tuples:
         # ((xpos, ypos), type, distance)
@@ -436,8 +588,8 @@ class Board(QWidget):
         # list of robot object tuples:
         # ((xpos, ypos), distance)
         robot_data = self.calculate_vision_robots(robot)
-        data = (board_data, robot_data)
 
+        data = (board_data, robot_data)
         return SensorData(SensorData.VISION_STRING, data, self.time_stamp)
 
     @staticmethod
@@ -482,6 +634,7 @@ class DataRobot(BaseRobot):
         self.serial_number = DataRobot.NextSerialNumber
         DataRobot.NextSerialNumber += 1
 
+        # Only some robots should receive an alert message.
         self.alert_flag = False
 
         self.thread_robot = thread_robot
