@@ -46,7 +46,7 @@ class Board(QWidget):
 
         # [...]
 ```
-Of course, we also need to adapt out robot creation function a bit:
+Of course, we also need to adapt our robot creation function a bit:
 ```python
     def construct_robot(self, radius, movement_funct, a_max, a_alpha_max,
                         position, fov_angle=90, alert_flag=False):
@@ -449,10 +449,11 @@ c = p^2 + q^2 - 2*pq - r^2
 ## Subsolution: The ray check: calculating t
 ### It t is a real value, the circle will intersect with the line!
 ### Therefore, we can check, if a robot's circle intersects with a limit line of the FoV.
-```python
+```
 t1/t2 = (-b +/- sqrt(b^2-4ac) ) / 2a
 
-mind: b^2-4ac # this is called the discriminant
+mind: b^2-4ac
+this is called the discriminant
 ```
 ### If the discriminant is negative, t is not a real value. The robot will remain unseen.
 
