@@ -6,7 +6,7 @@ from PyQt5.QtCore import Qt, QPoint, QBasicTimer
 from PyQt5.QtGui import QPainter, QColor, QBrush, QPen
 from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow
 
-from Movement import FollowMovement, RandomTargetMovement
+from Movement import FollowMovement, RandomTargetMovement, RunMovement, ChaseMovement
 from Robot import BaseRobot, ThreadRobot, SensorData
 import Utils
 
@@ -70,24 +70,24 @@ class Board(QWidget):
         """
 
         # First add the robots.
-        pos1 = (500, 500, 90, 0, 0)
-        mv1 = RandomTargetMovement()
-        self.construct_robot(TILE_SIZE * 4, mv1, 15, 15, pos1, alert_flag=True)
+        pos1 = (500, 500, 75, 0, 0)
+        mv1 = RunMovement()
+        self.construct_robot(TILE_SIZE * 4, mv1, 15, 10, pos1, alert_flag=True)
 
         pos2 = (45, 45, 0, 0, 0)
-        mv2 = FollowMovement(0)
-        self.construct_robot(TILE_SIZE * 3, mv2, 15, 15, pos2, alert_flag=True)
+        mv2 = ChaseMovement()
+        self.construct_robot(TILE_SIZE * 3, mv2, 15, 10, pos2, alert_flag=True)
 
         pos3 = (965, 35, 240, 0, 0)
-        mv3 = FollowMovement(1)
-        self.construct_robot(TILE_SIZE * 2, mv3, 15, 15, pos3, alert_flag=True)
+        mv3 = FollowMovement(0)
+        self.construct_robot(TILE_SIZE * 2, mv3, 15, 7.5, pos3, alert_flag=True)
 
-        pos4 = (500, 970, 240, 0, 0)
-        mv4 = FollowMovement(2)
+        pos4 = (300, 650, 70, 0, 0)
+        mv4 = RandomTargetMovement()
         self.construct_robot(TILE_SIZE * 1, mv4, 15, 15, pos4, alert_flag=True)
 
         # Then add scenario recipes.
-        self.create_catch_recipe(0, [3, 1])
+        self.create_catch_recipe(0, [3, 1, 2])
 
     def construct_robot(self, radius, movement_funct, a_max, a_alpha_max,
                         position, fov_angle=90, alert_flag=False):
