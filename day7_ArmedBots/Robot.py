@@ -6,17 +6,17 @@ from collections import deque
 
 class BaseRobot:
 
-    def __init__(self, radius, a_max, a_alpha_max, fov_angle=90):
+    def __init__(self, radius, a_max, a_alpha_max, gun, fov_angle=90):
         # set parameters
         self.radius = radius
 
         self.a_max = a_max
         self.a_alpha_max = a_alpha_max
 
-        self.fov_angle = fov_angle
-
         # TODO improve encapsulation
-        self.gun = RoboGun()
+        self.gun = gun
+
+        self.fov_angle = fov_angle
 
         # self.movement_funct = movement_funct
 
@@ -162,10 +162,10 @@ class SensorData:
 class RoboGun:
     """Mediator object between Data representation and autonomous unit."""
     BULLET_SPEED = 90
-    # TODO prevent queue from overflooding
+    # TODO prevent queue from overflowing
     FIRE_QUEUE_SIZE = 20
 
-    def __init__(self, bullet_speed=RoboGun.BULLET_SPEED):
+    def __init__(self, bullet_speed=BULLET_SPEED):
 
         self.bullet_speed = bullet_speed
         self.reloading = False
