@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow
 
 from Movement import FollowMovement, RandomTargetMovement, RunMovement, ChaseMovement
 from Robot import BaseRobot, ThreadRobot, SensorData
-import Utils
+import Utils, Robot
 
 FIELD_SIZE = 1000
 TILE_SIZE = 10
@@ -56,6 +56,9 @@ class Board(QWidget):
         # A list of DataRobots
         self.robots = []
 
+        # TODO insert datarep for bullets here
+        self.bullets = []
+
         self.collision_scenarios = dict()
 
         self.create_scenario()
@@ -96,9 +99,9 @@ class Board(QWidget):
         """
 
         # We also need to set the fov_angle now.
-        base_robot = BaseRobot(radius, a_max, a_alpha_max, fov_angle)
-        thread_robo = ThreadRobot(base_robot, movement_funct)
-        data_robot = DataRobot(base_robot, thread_robo)
+        base_robot = BaseRobot(radius, a_max, a_alpha_max, Robot.RoboGun(), fov_angle)
+        thread_robot = ThreadRobot(base_robot, movement_funct)
+        data_robot = DataRobot(base_robot, thread_robot)
         if alert_flag:
             data_robot.set_alert_flag()
 
@@ -186,23 +189,28 @@ class Board(QWidget):
         # drawing small circle
         qp.drawEllipse(center, 2, 2)
 
-    def create_catch_recipe(self, fugative, hunters):
+    def drawBullet(self, qp, bullet):
+        qp.setPen(Qt.red)
+        qp.setBrush(Qt.red)
+        qp.drawEllipse(bullet['position'], 3, 3)
+
+    def create_catch_recipe(self, fugitive, hunters):
         """Adds a new concrete scenario recipe.
-        If fugative is caught, teleport catcher away.
+        If fugitive is caught, teleport catcher away.
         """
 
-        # TODO make abstract with extrenal callee
+        # TODO make abstract with external callee
 
         def callee(hunter, board):
-            fbot = board.robots[fugative]
-            fpos = (fbot.x, fbot.y)
-            hbot = board.robots[hunter]
-            board.teleport_furthest_corner(fpos, hbot)
+            fugitive_bot = board.robots[fugitive]
+            fugitive_pos = (fugitive_bot.x, fugitive_bot.y)
+            hunter_bot = board.robots[hunter]
+            board.teleport_furthest_corner(fugitive_pos, hunter_bot)
 
         for h in hunters:
             f = partial(callee, h)
-            self.collision_scenarios[(fugative, h)] = f
-            # self.collision_scenarios[(h, fugative)] = f
+            self.collision_scenarios[(fugitive, h)] = f
+            # self.collision_scenarios[(h, fugitive)] = f
 
     def perform_collision_scenario(self, col_tuple):
         """Collision scenario handler.
@@ -382,7 +390,7 @@ class Board(QWidget):
         new_v_alpha = robot.v_alpha + a_alpha
 
         # calculates the new position - factors in collisions
-        new_position_col = self.calculate_collision_walls(
+        new_position_col = self.col_robots_walls(
             robot, new_v, new_v_alpha)
 
         # re-place the robot on the board
@@ -403,7 +411,17 @@ class Board(QWidget):
         new_position = (new_x, new_y, new_alpha, new_v, new_v_alpha)
         return new_position
 
-    def calculate_collision_walls(self, robot, new_v, new_v_alpha):
+    def calculate_bullet(self, bullet):
+        position = bullet['position']
+        new_bullet = bullet
+        direction_vec = Utils.vector_from_angle(bullet['direction'])
+        movement_vec = direction_vec * bullet['speed']
+        new_position = (position[0] + movement_vec[0],
+                        position[1] + movement_vec[1])
+        new_bullet['position'] = new_position
+        return new_bullet
+
+    def col_robots_walls(self, robot, new_v, new_v_alpha):
         """Task 2: Here the collision with obstacles is calculated."""
 
         # calculates the new position without factoring in any collisions
@@ -433,7 +451,7 @@ class Board(QWidget):
                     if self.obstacleArray[tile_x][tile_y] != 0:
 
                         # takes the position where it doesn't collide and the amount it backtracked
-                        sub_from_v, current_position_col = self.collision_single_tile(current_testing_position,
+                        sub_from_v, current_position_col = self.col_robots_walls_helper(current_testing_position,
                                                                                       robot, tile_x, tile_y)
 
                         # saves position with the most backtracking (the tile where it was in deepest)
@@ -459,7 +477,7 @@ class Board(QWidget):
             final_position_col = position_no_col
         return final_position_col
 
-    def collision_single_tile(self, new_position, robot, tile_x, tile_y):
+    def col_robots_walls_helper(self, new_position, robot, tile_x, tile_y):
         # checks if the robot collides with a specific tile
 
         # calc the coordinates of the given tile
@@ -509,20 +527,46 @@ class Board(QWidget):
         return sub_from_v, new_position_col
 
     # TODO we might improve that function
-    def check_collision_robots(self):
-        s = len(self.robots)
-        for i in range(s):
-            for j in range(s):
-                if not i == j:
-                    bot1 = self.robots[i]
-                    bot2 = self.robots[j]
-                    c1 = (bot1.x, bot1.y)
-                    r1 = (bot1.radius)
-                    c2 = (bot2.x, bot2.y)
-                    r2 = (bot2.radius)
-                    check, _ = Utils.overlap_check(c1, c2, r1, r2)
-                    if check:
-                        self.perform_collision_scenario((i, j))
+    def col_robots(self):
+        for robot1 in self.robots:
+            for robot2 in self.robots:
+                index_robot1 = self.robots.index(robot1)
+                index_robot2 = self.robots.index(robot2)
+                if index_robot1 != index_robot2:
+                    center_robot1 = (robot1.x, robot1.y)
+                    center_robot2 = (robot2.x, robot2.y)
+                    colliding, _ = Utils.overlap_check(center_robot1, center_robot2,
+                                                       robot1.radius, robot2.radius)
+                    if colliding:
+                        self.perform_collision_scenario((index_robot2, index_robot2))
+
+    def col_robots_bullets(self):
+        for robot in self.robots:
+            hit = False
+            robot_center = (robot.x, robot.y)
+            for bullet in self.bullets:
+                distance = Utils.distance(robot_center, bullet['position'])
+                if distance <= robot.radius:
+                    # TODO delete Bullet
+                    hit = True
+            if hit:
+                # TODO implement proper respawn procedure
+                self.teleport_furthest_corner(robot_center, robot)
+
+    def col_bullets_walls(self):
+        for bullet in self.bullets:
+            position = bullet['position']
+            tile_x = int(position[1] / TILE_SIZE)
+            tile_y = int(position[2] / TILE_SIZE)
+            if self.obstacleArray[tile_x][tile_y] != 0:
+                # TODO delete Bullet
+                a = 1
+
+
+
+
+
+
 
     def timerEvent(self, event):
         """The game's main loop.
@@ -538,6 +582,8 @@ class Board(QWidget):
             # if collision:
             #     m = self.create_bonk_message(collision)
             #     robot.send_sensor_data(m)
+        for bullet in self.bullets:
+            self.calculate_bullet(bullet)
 
         if self.time_stamp % 10 == 0:
 
@@ -547,7 +593,9 @@ class Board(QWidget):
                     robot.send_sensor_data(m)
 
         # TODO we might improve that function
-        self.check_collision_robots()
+        self.col_robots()
+        self.col_robots_bullets()
+        self.col_bullets_walls()
 
         # Task 2: Now also send vision messages each tick.
         for robot in self.robots:
