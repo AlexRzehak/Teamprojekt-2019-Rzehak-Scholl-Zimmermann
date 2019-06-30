@@ -833,3 +833,151 @@ class ChaseMovement(Movement):
             a_alpha = 0.01
 
         return a, a_alpha
+
+
+class ChaseMovementGun(Movement):
+
+    def vision(self, data, robot):
+        robot.destination = ChaseMovement.search(data)
+        # execute shoot behavior
+        shoot_straight(robot, data)
+        return robot.a, robot.a_alpha
+
+    def position(self, data, robot):
+        x, y, alpha, v, v_alpha, = data
+        target_bot = robot.destination
+        if type(target_bot) == bool:
+            a = 0
+            if v_alpha < robot.a_alpha_max:
+                a_alpha = 1
+            elif v_alpha >= robot.a_alpha_max:
+                a_alpha = 0
+        else:
+            a, a_alpha = ChaseMovementGun.position_destination_robot(self, data, robot)
+            robot.destination = None
+
+        return a, a_alpha
+
+    @staticmethod
+    def search(array_tuple):
+        robot_array = array_tuple[1]
+        found_bot = robot_array[0]
+        return found_bot
+
+    def position_destination_robot(self, data, robot):
+        x, y, alpha, v, v_alpha = data
+
+        # setting the robots destination
+        if not robot.destination:
+            destination_x = x
+            destination_y = y
+        else:
+            destination_x = robot.destination[0][0]
+            destination_y = robot.destination[0][1]
+
+        # calculating angle between the velocity vector
+        # and the destination vector
+        alpha = alpha % 360
+        radian = (alpha / 180 * math.pi)
+        if v == 0:
+            v = 0.00001
+
+        # calculating movement vector
+        velocity_vector_x = (v * math.sin(radian))
+        velocity_vector_y = - (v * math.cos(radian))
+        velocity_vector_magnitude = math.sqrt(
+            velocity_vector_x ** 2 + velocity_vector_y ** 2)
+
+        # calculating vector between robot and destination
+        destination_vector_x = destination_x - x
+        destination_vector_y = destination_y - y
+        destination_vector_magnitude = math.sqrt(
+            destination_vector_x ** 2 + destination_vector_y ** 2)
+
+        # calculating the value of the angle_change needed
+        vector_multiplication = (velocity_vector_x * destination_vector_x +
+                                 velocity_vector_y * destination_vector_y)
+        magnitude_multiplication = velocity_vector_magnitude * destination_vector_magnitude
+        destination_alpha = math.acos(
+            vector_multiplication / magnitude_multiplication) - 0.01
+        destination_alpha_degree = (destination_alpha * 180 / math.pi) % 360
+
+        # determining direction based on sign of the vectors cross product
+        cross_product = FollowMovement.cross_product(
+            (velocity_vector_x, velocity_vector_y),
+            (destination_vector_x, destination_vector_y))
+        if cross_product > 0:
+            delta_alpha = destination_alpha_degree
+            direction = "right"
+        elif cross_product < 0:
+            delta_alpha = - destination_alpha_degree
+            direction = "left"
+        elif cross_product == 0:
+            delta_alpha = destination_alpha_degree
+            direction = "None"
+
+        # setting a to accelerate to a speed of 10
+        if v <= 10:
+            a = 1
+        else:
+            a = 0
+        # setting a_alpha values
+        a_alpha_max = robot.a_alpha_max
+        if direction == "right":
+            if delta_alpha >= a_alpha_max + v_alpha:
+                a_alpha = a_alpha_max
+            elif delta_alpha < a_alpha_max + v_alpha:
+                a_alpha = delta_alpha - v_alpha
+
+        elif direction == "left":
+            if abs(delta_alpha) >= abs(a_alpha_max - v_alpha):
+                a_alpha = - a_alpha_max
+            elif abs(delta_alpha) < abs(a_alpha_max - v_alpha):
+                a_alpha = -(abs(delta_alpha)) + abs(v_alpha)
+
+        if direction == "none":
+            a_alpha = 0.01
+
+        return a, a_alpha
+
+
+def shoot_straight(robot, data):
+    x, y, alpha, v, v_alpha = data
+    coordinates = robot.target
+
+    angle = SimpleAvoidMovement.calculate_angle_between_vectors(coordinates, x, y, v, alpha)
+    ready = not (robot.is_shooting or robot.is_reloading)
+    if ready:
+        # set acceptable inaccuracy
+        max_inaccuracy = 20
+        # calculate aim inaccuracy
+        inaccuracy = calculate_inaccuracy((x, y), coordinates, alpha, v)
+        # decide action
+        if inaccuracy <= max_inaccuracy and angle <= 90:
+            robot.shoot()
+
+
+# For angles < 90
+def calculate_inaccuracy(position, coordinates, alpha, vel):
+    x = position[0]
+    y = position[1]
+    c_x = coordinates[0]
+    c_y = coordinates[1]
+    robot_radian = (alpha / 180 * math.pi)
+
+    # get angle between aim direction and target, as radian
+    angle = SimpleAvoidMovement.calculate_angle_between_vectors(coordinates, x, y, vel, alpha)
+    angle = angle % 360
+    target_radian = (angle / 180 * math.pi)
+
+    # calculate distance between position and coordinates
+    distance = math.sqrt((c_x-x)**2 + (c_y-y)**2)
+
+    # calculate opposite's length of Triangle
+    a = (math.sin(target_radian)*distance)
+    b = (math.sin(robot_radian)*distance)
+    opp_abs = math.sqrt(a**2 + b**2)
+
+    # calculate inaccuracy
+    inaccuracy = math.sin(target_radian) * opp_abs
+    return inaccuracy

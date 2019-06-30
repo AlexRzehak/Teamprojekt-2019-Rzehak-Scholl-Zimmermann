@@ -1,6 +1,5 @@
 import math
 from Movement import SimpleAvoidMovement
-# from Robot import ThreadedRobot
 
 
 # TODO: Find a place for it
@@ -18,9 +17,7 @@ def shoot_straight(robot, data):
         inaccuracy = calculate_inaccuracy((x, y), coordinates, alpha, v)
         # decide action
         if inaccuracy <= max_inaccuracy and angle <= 90:
-            return ThreadedRobot.shoot()
-        else:
-            return None
+            robot.shoot()
 
 
 # For angles < 90
