@@ -526,6 +526,12 @@ class Board(QWidget):
         # return the amount of backtracing (0 if no collision) and the closest position that is collision free
         return sub_from_v, new_position_col
 
+    def calculate_bullets(self):
+        # TODO: Here, the bullet movement happens.
+        # Check for collision with walls and despawn the bullet.
+        # Check for collision with robots and kill the robot (despawning the bullet).
+        pass
+
     # TODO we might improve that function
     def check_collision_robots(self):
         s = len(self.robots)
@@ -549,6 +555,10 @@ class Board(QWidget):
         # TODO use delta-time to interpolate visuals
 
         self.time_stamp += 1
+
+        self.calculate_shoot_action()
+
+        self.calculate_bullets()
 
         for robot in self.robots:
             poll = robot.poll_action_data()
