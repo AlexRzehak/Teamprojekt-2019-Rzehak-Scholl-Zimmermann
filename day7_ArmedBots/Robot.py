@@ -3,6 +3,8 @@ import threading
 import time
 from collections import deque
 
+import Utils
+
 
 class BaseRobot:
 
@@ -25,8 +27,7 @@ class ThreadRobot(BaseRobot):
 
     MemSize = 10
 
-    def __init__(self, base_robot: BaseRobot, movement_funct,
-                 resync_flag=False):
+    def __init__(self, base_robot: BaseRobot, movement_funct):
 
         super().__init__(**vars(base_robot))
 
@@ -38,19 +39,23 @@ class ThreadRobot(BaseRobot):
         self.thread = None
         self._sensor_queue = queue.Queue()
 
+        # the behaviour of the robot
+        self.movement_funct = movement_funct
+
+        # use the gun_interface to tell the server when you want to shoot.
+        self.gun_interface = None
+
         # auto-resync of the robot.
         # robot will use resync functionality when resync_flag is set to True.
         # TODO implement resync policy
-        self.resync_flag = resync_flag
+        self.resync_flag = False
         self.resync_data = 0
-
-        # the behaviour of the robot
-        self.movement_funct = movement_funct
-        # TODO implement memory poliy
-        # self.memory_policy = None
 
         # simple memory stack for the robot.
         self.memory = deque([])
+
+        # TODO implement memory policy
+        # self.memory_policy = None
 
         # the robot will atempt to go here (x,y)
         self.destination = None
@@ -75,6 +80,10 @@ class ThreadRobot(BaseRobot):
             self.resync_data = data.time_stamp
 
         self._sensor_queue.put(data)
+
+    # Resync Management
+    def set_resync_flag(self, value):
+        self.resync_flag = value
 
     # Static resync policy
     def resync_check(self, signal):
@@ -119,6 +128,26 @@ class ThreadRobot(BaseRobot):
             if signal.message_type == SensorData.ALERT_STRING:
                 self.memorize(signal)
 
+    # gun stuff
+    def setup_gun_interface(self, gun_interface):
+        self.gun_interface = gun_interface
+
+    def is_reloading(self):
+        if self.gun_interface:
+            return self.gun_interface.is_reloading()
+        return False
+
+    def is_shooting(self):
+        """Return True if robot will already shoot at the next server tick."""
+        if self.gun_interface:
+            return self.gun_interface.is_preparing()
+        return False
+
+    # the robot will shoot at the next server tick
+    def shoot(self):
+        if self.gun_interface:
+            self.gun_interface.prepare_fire()
+
     # Save a message in the memory.
     def memorize(self, signal):
 
@@ -142,3 +171,72 @@ class SensorData:
         self.message_type = message_type
         self.data = data
         self.time_stamp = time_stamp
+
+
+class RoboGun:
+    """Mediator object between Data representation and autonomous unit."""
+    BULLET_SPEED = 90
+    FIRE_QUEUE_SIZE = 20
+
+    def __init__(self, bullet_speed=None):
+
+        self.bullet_speed = bullet_speed
+        if not bullet_speed:
+            self.bullet_speed = RoboGun.BULLET_SPEED
+        self.reloading = False
+        self.fire_queue = queue.Queue(RoboGun.FIRE_QUEUE_SIZE)
+
+    def is_preparing(self):
+        return not self.fire_queue.empty()
+
+    def is_reloading(self):
+        return self.reloading
+
+    def prepare_fire(self, data=True):
+        # More complex data might be used later.
+        try:
+            self.fire_queue.put(data, block=False)
+        except queue.Full:
+            return False
+        else:
+            return True
+
+    def trigger_fire(self):
+        task = self._get_fire_task()
+        if not task:
+            return False
+        # get data by: _, task_data = task now.
+
+        # bullet = dict()
+        # bullet['speed'] = self.bullet_speed + data_robot.v
+        # bullet['direction'] = data_robot.alpha
+        # bullet['position'] = (data_robot.x, data_robot.y)
+
+        self._initiate_reload()
+
+        return self.bullet_speed
+
+    def _get_fire_task(self):
+        # if no item is in the queue, don't wait until it is!
+        try:
+            task = self.fire_queue.get(block=False)
+        except queue.Empty:
+            return False
+        else:
+            return True, task
+
+    def _initiate_reload(self):
+
+        def finish_reload():
+            self.reloading = False
+
+        self.reloading = True
+        Utils.execute_after(1, finish_reload)
+
+
+class GunInterface:
+    def __init__(self, gun: RoboGun):
+
+        self.is_preparing = gun.is_preparing
+        self.is_reloading = gun.is_reloading
+        self.prepare_fire = gun.prepare_fire

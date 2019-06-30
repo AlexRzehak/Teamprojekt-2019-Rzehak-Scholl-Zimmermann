@@ -1,5 +1,7 @@
 import numpy as np
 import math
+import time
+import threading
 
 from PyQt5.QtCore import QPoint
 
@@ -185,6 +187,16 @@ def limit(value, min_limit, max_limit):
         return min_limit
     else:
         return value
+
+
+def execute_after(secs: float, func):
+    def wait_and_call(secs, func):
+        time.sleep(secs)
+        func()
+
+    t = threading.Thread(target=wait_and_call, args=(secs, func))
+    t.daemon = True
+    t.start()
 
 
 def create_example_array(size: int):

@@ -497,7 +497,7 @@ class SimpleAvoidMovement(Movement):
 class RunMovement(Movement):
 
     def alert(self, data, robot):
-        robot.robomap = data
+        # robot.robomap = data
         robot.threat = RunMovement.prime_robot(data)
         return robot.a, robot.a_alpha
 

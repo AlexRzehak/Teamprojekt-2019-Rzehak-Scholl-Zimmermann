@@ -1,13 +1,14 @@
 import sys
 import math
 from functools import partial
+from dataclasses import dataclass
 
 from PyQt5.QtCore import Qt, QPoint, QBasicTimer
 from PyQt5.QtGui import QPainter, QColor, QBrush, QPen
 from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow
 
 from Movement import FollowMovement, RandomTargetMovement, RunMovement, ChaseMovement
-from Robot import BaseRobot, ThreadRobot, SensorData
+from Robot import BaseRobot, ThreadRobot, SensorData, RoboGun, GunInterface
 import Utils
 
 FIELD_SIZE = 1000
@@ -56,6 +57,8 @@ class Board(QWidget):
         # A list of DataRobots
         self.robots = []
 
+        self.bullets = set()
+
         self.collision_scenarios = dict()
 
         self.create_scenario()
@@ -72,39 +75,55 @@ class Board(QWidget):
         # First add the robots.
         pos1 = (500, 500, 75, 0, 0)
         mv1 = RunMovement()
-        self.construct_robot(TILE_SIZE * 4, mv1, 15, 10, pos1, alert_flag=True)
+        robo1 = self.construct_robot(TILE_SIZE * 4, mv1, 15, 10, pos1)
+        robo1.set_alert_flag()
+        self.deploy_robot(robo1)
 
         pos2 = (45, 45, 0, 0, 0)
         mv2 = ChaseMovement()
-        self.construct_robot(TILE_SIZE * 3, mv2, 15, 10, pos2, alert_flag=True)
+        robo2 = self.construct_robot(TILE_SIZE * 3, mv2, 15, 10, pos2)
+        robo2.set_alert_flag()
+        self.deploy_robot(robo2)
 
         pos3 = (965, 35, 240, 0, 0)
         mv3 = FollowMovement(0)
-        self.construct_robot(TILE_SIZE * 2, mv3, 15, 7.5, pos3, alert_flag=True)
+        robo3 = self.construct_robot(TILE_SIZE * 2, mv3, 15, 7.5, pos3)
+        robo3.set_alert_flag()
+        self.deploy_robot(robo3)
 
         pos4 = (300, 650, 70, 0, 0)
         mv4 = RandomTargetMovement()
-        self.construct_robot(TILE_SIZE * 1, mv4, 15, 15, pos4, alert_flag=True)
+        robo4 = self.construct_robot(TILE_SIZE * 1, mv4, 15, 15, pos4)
+        robo4.set_alert_flag()
+        self.deploy_robot(robo4)
 
         # Then add scenario recipes.
         self.create_catch_recipe(0, [3, 1, 2])
 
+    def deploy_robot(self, data_robot):
+        self.robots.append(data_robot)
+
     def construct_robot(self, radius, movement_funct, a_max, a_alpha_max,
-                        position, fov_angle=90, alert_flag=False):
-        """Create a new robot with given parameters and add it to the board.
+                        position, fov_angle=90, gun=None):
+        """
+        Create a new robot with given parameters.
+        You can add it to the board using deploy_robot().
         """
 
-        # We also need to set the fov_angle now.
+        # Create robot body with its set parameters.
         base_robot = BaseRobot(radius, a_max, a_alpha_max, fov_angle)
-        thread_robo = ThreadRobot(base_robot, movement_funct)
-        data_robot = DataRobot(base_robot, thread_robo)
-        if alert_flag:
-            data_robot.set_alert_flag()
 
+        # Create autonomous robot unit.
+        thread_robot = ThreadRobot(base_robot, movement_funct)
+
+        # Create data representation to be added to tracking of the server.
+        data_robot = DataRobot(base_robot, thread_robot)
+        # set up communication with thread robot about gun data
+        data_robot.setup_gun(gun)
         # a position consists of (x, y, alpha, v, v_alpha) values
         data_robot.place_robot(*position)
 
-        self.robots.append(data_robot)
+        return data_robot
 
     def paintEvent(self, e):
 
@@ -507,6 +526,12 @@ class Board(QWidget):
         # return the amount of backtracing (0 if no collision) and the closest position that is collision free
         return sub_from_v, new_position_col
 
+    def calculate_bullets(self):
+        # TODO: Here, the bullet movement happens.
+        # Check for collision with walls and despawn the bullet.
+        # Check for collision with robots and kill the robot (despawning the bullet).
+        pass
+
     # TODO we might improve that function
     def check_collision_robots(self):
         s = len(self.robots)
@@ -530,6 +555,10 @@ class Board(QWidget):
         # TODO use delta-time to interpolate visuals
 
         self.time_stamp += 1
+
+        self.calculate_shoot_action()
+
+        self.calculate_bullets()
 
         for robot in self.robots:
             poll = robot.poll_action_data()
@@ -592,6 +621,13 @@ class Board(QWidget):
         data = (board_data, robot_data)
         return SensorData(SensorData.VISION_STRING, data, self.time_stamp)
 
+    # gun stuff
+    def calculate_shoot_action(self):
+        for robot in self.robots:
+            maybe_bullet = robot.perform_shoot_action()
+            if maybe_bullet:
+                self.bullets.add(maybe_bullet)
+
     @staticmethod
     def place_robot(robot, x, y, alpha, v, v_alpha):
         """Re-places a robot with given position values.
@@ -631,6 +667,8 @@ class DataRobot(BaseRobot):
         self.v = 0
         self.v_alpha = 0
 
+        self.gun = None
+
         self.serial_number = DataRobot.NextSerialNumber
         DataRobot.NextSerialNumber += 1
 
@@ -662,8 +700,56 @@ class DataRobot(BaseRobot):
     def start(self):
         self.thread_robot.run()
 
+    # gun stuff
+    def perform_shoot_action(self):
+        """Will return a valid bullet, if the robot is shooting.
+        Else returns False.
+        """
+
+        maybe_bullet = False
+
+        if not self.gun:
+            return maybe_bullet
+
+        maybe_data = self.gun.trigger_fire()
+        if maybe_data:
+            angle = self.alpha
+
+            angle_vector = Utils.vector_from_angle(angle)
+            robot_center = (self.x, self.y)
+            bullet_start = robot_center + (self.radius + 1) * angle_vector
+            # bullet_start = ((int)bullet_start[0], (int) bullet_start[1])
+
+            speed = self.v + maybe_data
+
+            maybe_bullet = Bullet(position=bullet_start,
+                                  direction=angle,
+                                  speed=speed)
+        return maybe_bullet
+
+    def setup_gun(self, gun=None):
+        """Set up gun communication between autonomous unit and server."""
+        if not gun:
+            gun = RoboGun()
+
+        self.gun = gun
+
+        gun_interface = GunInterface(gun)
+        self.thread_robot.setup_gun_interface(gun_interface)
+
+    # optional flags
     def set_alert_flag(self, value=True):
         self.alert_flag = value
+
+    def set_resync_flag(self, value=True):
+        self.thread_robot.set_resync_flag(value)
+
+
+@dataclass
+class Bullet:
+    position: tuple
+    speed: float
+    direction: int
 
 
 if __name__ == '__main__':
