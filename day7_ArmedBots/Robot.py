@@ -175,7 +175,7 @@ class SensorData:
 
 class RoboGun:
     """Mediator object between Data representation and autonomous unit."""
-    BULLET_SPEED = 90
+    BULLET_SPEED = 10
     FIRE_QUEUE_SIZE = 20
 
     def __init__(self, bullet_speed=None):
@@ -202,6 +202,9 @@ class RoboGun:
             return True
 
     def trigger_fire(self):
+        if self.reloading:
+            return False
+
         task = self._get_fire_task()
         if not task:
             return False

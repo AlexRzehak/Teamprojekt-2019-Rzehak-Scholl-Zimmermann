@@ -738,6 +738,10 @@ class ChaseMovement(Movement):
         return robot.a, robot.a_alpha
 
     def position(self, data, robot):
+
+        # TODO delete this
+        robot.shoot()
+
         x, y, alpha, v, v_alpha, = data
         target_bot = robot.destination
         if type(target_bot) == bool:

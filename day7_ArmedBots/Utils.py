@@ -175,7 +175,7 @@ def vector_from_angle(angle):
     """
     ang_rad = np.radians((angle - 90))
     v = (np.cos(ang_rad), np.sin(ang_rad))
-    return v
+    return np.array(v)
 
 
 # only here to assist collision_single_tile

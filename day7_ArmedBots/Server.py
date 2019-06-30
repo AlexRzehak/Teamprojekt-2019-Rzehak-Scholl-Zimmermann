@@ -125,6 +125,10 @@ class Board(QWidget):
 
         return data_robot
 
+    # ==================================
+    # Painter Area
+    # ==================================
+
     def paintEvent(self, e):
 
         qp = QPainter()
@@ -133,6 +137,7 @@ class Board(QWidget):
         self.drawObstacles(qp)
         for robot in self.robots:
             self.drawRobot(qp, robot)
+        self.drawBullets(qp)
         qp.end()
 
     def drawBoard(self, qp):
@@ -204,23 +209,34 @@ class Board(QWidget):
         # drawing small circle
         qp.drawEllipse(center, 2, 2)
 
-    def create_catch_recipe(self, fugative, hunters):
+    def drawBullets(self, qp):
+        qp.setPen(Qt.red)
+        qp.setBrush(Qt.red)
+        for bullet in self.bullets:
+            pos = QPoint(bullet.position[0], bullet.position[1])
+            qp.drawEllipse(pos, 3, 3)
+
+    # ==================================
+    # Scenario Area
+    # ==================================
+
+    def create_catch_recipe(self, fugitive, hunters):
         """Adds a new concrete scenario recipe.
-        If fugative is caught, teleport catcher away.
+        If fugitive is caught, teleport catcher away.
         """
 
-        # TODO make abstract with extrenal callee
+        # TODO make abstract with external callee
 
         def callee(hunter, board):
-            fbot = board.robots[fugative]
-            fpos = (fbot.x, fbot.y)
-            hbot = board.robots[hunter]
-            board.teleport_furthest_corner(fpos, hbot)
+            fugitive_bot = board.robots[fugitive]
+            fugitive_pos = (fugitive_bot.x, fugitive_bot.y)
+            hunter_bot = board.robots[hunter]
+            board.teleport_furthest_corner(fugitive_pos, hunter_bot)
 
         for h in hunters:
             f = partial(callee, h)
-            self.collision_scenarios[(fugative, h)] = f
-            # self.collision_scenarios[(h, fugative)] = f
+            self.collision_scenarios[(fugitive, h)] = f
+            # self.collision_scenarios[(h, fugitive)] = f
 
     def perform_collision_scenario(self, col_tuple):
         """Collision scenario handler.
@@ -271,6 +287,10 @@ class Board(QWidget):
             position = (pos4[0], pos4[1], 45, 0, 0)
 
         robot.place_robot(*position)
+
+    # ==================================
+    # Vision Area
+    # ==================================
 
     def calculate_vision_board(self, robot):
         """Calculate a list of all obejcts seen by a robot.
@@ -379,6 +399,10 @@ class Board(QWidget):
         # now the list is complete
         return result
 
+    # ==================================
+    # Collision Area
+    # ==================================
+
     def calculate_robot(self, poll, robot):
         """Uses current position data of robot robot and acceleration values
         polled from the robot to calculate new position values.
@@ -400,7 +424,7 @@ class Board(QWidget):
         new_v_alpha = robot.v_alpha + a_alpha
 
         # calculates the new position - factors in collisions
-        new_position_col = self.calculate_collision_walls(
+        new_position_col = self.col_robots_walls(
             robot, new_v, new_v_alpha)
 
         # re-place the robot on the board
@@ -421,7 +445,7 @@ class Board(QWidget):
         new_position = (new_x, new_y, new_alpha, new_v, new_v_alpha)
         return new_position
 
-    def calculate_collision_walls(self, robot, new_v, new_v_alpha):
+    def col_robots_walls(self, robot, new_v, new_v_alpha):
         """Task 2: Here the collision with obstacles is calculated."""
 
         # calculates the new position without factoring in any collisions
@@ -451,8 +475,8 @@ class Board(QWidget):
                     if self.obstacleArray[tile_x][tile_y] != 0:
 
                         # takes the position where it doesn't collide and the amount it backtracked
-                        sub_from_v, current_position_col = self.collision_single_tile(current_testing_position,
-                                                                                      robot, tile_x, tile_y)
+                        sub_from_v, current_position_col = self.col_robots_walls_helper(current_testing_position,
+                                                                                        robot, tile_x, tile_y)
 
                         # saves position with the most backtracking (the tile where it was in deepest)
                         if sub_from_v > max_sub:
@@ -477,7 +501,7 @@ class Board(QWidget):
             final_position_col = position_no_col
         return final_position_col
 
-    def collision_single_tile(self, new_position, robot, tile_x, tile_y):
+    def col_robots_walls_helper(self, new_position, robot, tile_x, tile_y):
         # checks if the robot collides with a specific tile
 
         # calc the coordinates of the given tile
@@ -526,12 +550,6 @@ class Board(QWidget):
         # return the amount of backtracing (0 if no collision) and the closest position that is collision free
         return sub_from_v, new_position_col
 
-    def calculate_bullets(self):
-        # TODO: Here, the bullet movement happens.
-        # Check for collision with walls and despawn the bullet.
-        # Check for collision with robots and kill the robot (despawning the bullet).
-        pass
-
     # TODO we might improve that function
     def check_collision_robots(self):
         s = len(self.robots)
@@ -547,6 +565,73 @@ class Board(QWidget):
                     check, _ = Utils.overlap_check(c1, c2, r1, r2)
                     if check:
                         self.perform_collision_scenario((i, j))
+
+    # ==================================
+    # Gun Area
+    # ==================================
+
+    def calculate_shoot_action(self):
+        for robot in self.robots:
+            maybe_bullet = robot.perform_shoot_action()
+            if maybe_bullet:
+                self.bullets.add(maybe_bullet)
+
+    # TODO: Here, the bullet movement happens.
+    # Check for collision with walls and despawn the bullet.
+    # Check for collision with robots and kill the robot (despawn the bullet).
+    def calculate_bullets(self):
+        # move
+        for bullet in self.bullets:
+            self.move_bullet(bullet)
+        # collide with robots
+        self.col_robots_bullets()
+        # collide with walls
+        self.col_bullets_walls()
+
+    def move_bullet(self, bullet):
+        pos = bullet.position
+
+        direction_vec = Utils.vector_from_angle(bullet.direction)
+        movement_vec = direction_vec * bullet.speed
+        new_position = pos + movement_vec
+
+        bullet.position = new_position
+
+    def col_robots_bullets(self):
+        # TODO prevent bulltes from glitching through robots
+        for robot in self.robots:
+            hit = False
+            robot_center = (robot.x, robot.y)
+            for bullet in self.bullets.copy():
+                distance = Utils.distance(robot_center, bullet.position)
+                if distance <= robot.radius:
+                    # TODO delete Bullet
+                    self.bullets.remove(bullet)
+                    hit = True
+            if hit:
+                # TODO implement proper respawn procedure
+                self.teleport_furthest_corner(robot_center, robot)
+
+    def col_bullets_walls(self):
+        # TODO prevent bulltes from glitching through the walls
+        for bullet in self.bullets.copy():
+            position = bullet.position
+
+            tile_x = int(position[0] / TILE_SIZE)
+            tile_x = Utils.limit(tile_x, 0, Board.TileCount - 1)
+
+            tile_y = int(position[1] / TILE_SIZE)
+            tile_y = Utils.limit(tile_y, 0, Board.TileCount - 1)
+
+            if self.obstacleArray[tile_x][tile_y] != 0:
+                # TODO delete Bullet
+                self.bullets.remove(bullet)
+                # TODO ?????????????
+                a = 1
+
+    # ==================================
+    # Main Loop
+    # ==================================
 
     def timerEvent(self, event):
         """The game's main loop.
@@ -587,6 +672,10 @@ class Board(QWidget):
         # update visuals
         self.update()
 
+    # ==================================
+    # Message Area
+    # ==================================
+
     def create_alert_message(self):
         data = []
 
@@ -620,13 +709,6 @@ class Board(QWidget):
 
         data = (board_data, robot_data)
         return SensorData(SensorData.VISION_STRING, data, self.time_stamp)
-
-    # gun stuff
-    def calculate_shoot_action(self):
-        for robot in self.robots:
-            maybe_bullet = robot.perform_shoot_action()
-            if maybe_bullet:
-                self.bullets.add(maybe_bullet)
 
     @staticmethod
     def place_robot(robot, x, y, alpha, v, v_alpha):
@@ -718,13 +800,13 @@ class DataRobot(BaseRobot):
             angle_vector = Utils.vector_from_angle(angle)
             robot_center = (self.x, self.y)
             bullet_start = robot_center + (self.radius + 1) * angle_vector
-            # bullet_start = ((int)bullet_start[0], (int) bullet_start[1])
+            # bullet_start = (int(bullet_start[0]), int(bullet_start[1]))
 
             speed = self.v + maybe_data
 
             maybe_bullet = Bullet(position=bullet_start,
-                                  direction=angle,
-                                  speed=speed)
+                                  speed=speed,
+                                  direction=angle)
         return maybe_bullet
 
     def setup_gun(self, gun=None):
@@ -745,11 +827,11 @@ class DataRobot(BaseRobot):
         self.thread_robot.set_resync_flag(value)
 
 
-@dataclass
 class Bullet:
-    position: tuple
-    speed: float
-    direction: int
+    def __init__(self, position, speed, direction):
+        self.position = position
+        self.speed = speed
+        self.direction = direction
 
 
 if __name__ == '__main__':
