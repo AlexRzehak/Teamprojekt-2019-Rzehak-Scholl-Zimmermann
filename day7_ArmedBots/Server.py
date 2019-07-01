@@ -250,41 +250,24 @@ class Board(QWidget):
         with the largest distance from point.
         """
 
-        # TODO make less ugly
+        lower_limit = TILE_SIZE + robot.radius + 1
+        upper_limit = FIELD_SIZE - TILE_SIZE - robot.radius - 2
 
-        # first free pixel in every corner
-        corner1 = (TILE_SIZE, TILE_SIZE)
-        corner2 = (FIELD_SIZE - TILE_SIZE - 1, TILE_SIZE)
-        corner3 = (FIELD_SIZE - TILE_SIZE - 1, FIELD_SIZE - TILE_SIZE - 1)
-        corner4 = (TILE_SIZE, FIELD_SIZE - TILE_SIZE - 1)
+        up_left_corner = (lower_limit, lower_limit, 135, 0, 0)
+        up_right_corner = (lower_limit, upper_limit, 45, 0, 0)
+        down_left_corner = (upper_limit, lower_limit, 225, 0, 0)
+        down_right_corner = (upper_limit, upper_limit, 315, 0, 0)
 
-        rad = robot.radius
-        pos1 = (corner1[0] + rad + 1, corner1[1] + rad + 1)
-        pos2 = (corner2[0] - rad - 1, corner2[1] + rad + 1)
-        pos3 = (corner3[0] - rad - 1, corner3[1] - rad - 1)
-        pos4 = (corner4[0] + rad + 1, corner4[1] - rad - 1)
-
-        positions = [pos1, pos2, pos3, pos4]
-
-        d = 0
-        p = -1
-
-        for i in range(4):
-            dist = Utils.distance(point, positions[i])
-            if dist > d:
-                d = dist
-                p = i
-
-        position = (robot.x, robot.y, robot.alpha, robot.v, robot.v_alpha)
-
-        if p == 0:
-            position = (pos1[0], pos1[1], 135, 0, 0)
-        elif p == 1:
-            position = (pos2[0], pos2[1], 225, 0, 0)
-        elif p == 2:
-            position = (pos3[0], pos3[1], 315, 0, 0)
-        elif p == 3:
-            position = (pos4[0], pos4[1], 45, 0, 0)
+        if point[0] > (FIELD_SIZE / 2):
+            if point[1] > (FIELD_SIZE / 2):
+                position = up_left_corner
+            else:
+                position = up_right_corner
+        else:
+            if point[1] > (FIELD_SIZE / 2):
+                position = down_left_corner
+            else:
+                position = down_right_corner
 
         robot.place_robot(*position)
 
@@ -567,7 +550,7 @@ class Board(QWidget):
                         self.perform_collision_scenario((i, j))
 
     # ==================================
-    # Gun Area
+    # Gun/Bullet Area
     # ==================================
 
     def calculate_shoot_action(self):
@@ -580,54 +563,54 @@ class Board(QWidget):
     # Check for collision with walls and despawn the bullet.
     # Check for collision with robots and kill the robot (despawn the bullet).
     def calculate_bullets(self):
-        # move
+
+        to_be_removed = set()
+
         for bullet in self.bullets:
-            self.move_bullet(bullet)
+            # move
+            initial_position = bullet.position
+            for test_speed in range(int(bullet.speed)):
+
+                direction_vec = Utils.vector_from_angle(bullet.direction)
+                movement_vec = direction_vec * test_speed
+                new_position = initial_position + movement_vec
+                bullet.position = new_position
+
+                if self.col_bullet_walls(bullet):
+                    to_be_removed.add(bullet)
+                    break
+
+        for bullet in to_be_removed:
+            self.bullets.remove(bullet)
+
         # collide with robots
         self.col_robots_bullets()
-        # collide with walls
-        self.col_bullets_walls()
-
-    def move_bullet(self, bullet):
-        pos = bullet.position
-
-        direction_vec = Utils.vector_from_angle(bullet.direction)
-        movement_vec = direction_vec * bullet.speed
-        new_position = pos + movement_vec
-
-        bullet.position = new_position
 
     def col_robots_bullets(self):
-        # TODO prevent bulltes from glitching through robots
+        # TODO prevent bullets from glitching through robots
         for robot in self.robots:
             hit = False
             robot_center = (robot.x, robot.y)
             for bullet in self.bullets.copy():
                 distance = Utils.distance(robot_center, bullet.position)
                 if distance <= robot.radius:
-                    # TODO delete Bullet
                     self.bullets.remove(bullet)
                     hit = True
             if hit:
                 # TODO implement proper respawn procedure
                 self.teleport_furthest_corner(robot_center, robot)
 
-    def col_bullets_walls(self):
-        # TODO prevent bulltes from glitching through the walls
-        for bullet in self.bullets.copy():
-            position = bullet.position
+    def col_bullet_walls(self, bullet):
+        # TODO prevent bullets from glitching through the walls
+        position = bullet.position
 
-            tile_x = int(position[0] / TILE_SIZE)
-            tile_x = Utils.limit(tile_x, 0, Board.TileCount - 1)
+        tile_x = int(position[0] / TILE_SIZE)
+        tile_x = Utils.limit(tile_x, 0, Board.TileCount - 1)
 
-            tile_y = int(position[1] / TILE_SIZE)
-            tile_y = Utils.limit(tile_y, 0, Board.TileCount - 1)
+        tile_y = int(position[1] / TILE_SIZE)
+        tile_y = Utils.limit(tile_y, 0, Board.TileCount - 1)
 
-            if self.obstacleArray[tile_x][tile_y] != 0:
-                # TODO delete Bullet
-                self.bullets.remove(bullet)
-                # TODO ?????????????
-                a = 1
+        return self.obstacleArray[tile_x][tile_y] != 0
 
     # ==================================
     # Main Loop
