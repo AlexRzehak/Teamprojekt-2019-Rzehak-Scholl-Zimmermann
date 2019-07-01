@@ -178,8 +178,6 @@ def vector_from_angle(angle):
     return np.array(v)
 
 
-# only here to assist collision_single_tile
-# limits a value to a max and a min
 def limit(value, min_limit, max_limit):
     if value > max_limit:
         return max_limit
@@ -212,10 +210,11 @@ def create_example_array(size: int):
         array[size - 1][x] = 2
 
     # individual Wall tiles:
-    array[28][34] = 1
-    array[56][43] = 1
-    array[5][49] = 3
-    array[0][30] = 0
-    array[99][30] = 0
+    for i in range(int(size / 4), int(size / 2)):
+        array[i][int(size/2)] = 1
+        array[int(size/3)][i] = 1
+        array[int(size / 4 * 3)][i] = 1
+
+
 
     return array
