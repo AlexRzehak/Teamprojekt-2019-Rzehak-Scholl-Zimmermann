@@ -564,7 +564,8 @@ class Board(QWidget):
     # Check for collision with robots and kill the robot (despawn the bullet).
     def calculate_bullets(self):
 
-        to_be_removed = set()
+        bullets_to_be_removed = set()
+        robots_hit = []
 
         for bullet in self.bullets:
             # move
@@ -577,28 +578,29 @@ class Board(QWidget):
                 bullet.position = new_position
 
                 if self.col_bullet_walls(bullet):
-                    to_be_removed.add(bullet)
+                    bullets_to_be_removed.add(bullet)
                     break
+                else:
+                    robot_hit = self.col_robots_bullets(bullet)
+                    if robot_hit:
+                        robots_hit += robot_hit
+                        bullets_to_be_removed.add(bullet)
+                        break
 
-        for bullet in to_be_removed:
+        for bullet in bullets_to_be_removed:
             self.bullets.remove(bullet)
+        for robot in robots_hit:
+            # TODO implement proper respawn procedure
+            self.teleport_furthest_corner((robot.x, robot.y), robot)
 
-        # collide with robots
-        self.col_robots_bullets()
-
-    def col_robots_bullets(self):
-        # TODO prevent bullets from glitching through robots
+    def col_robots_bullets(self, bullet):
+        robot_hit = []
         for robot in self.robots:
-            hit = False
             robot_center = (robot.x, robot.y)
-            for bullet in self.bullets.copy():
-                distance = Utils.distance(robot_center, bullet.position)
-                if distance <= robot.radius:
-                    self.bullets.remove(bullet)
-                    hit = True
-            if hit:
-                # TODO implement proper respawn procedure
-                self.teleport_furthest_corner(robot_center, robot)
+            distance = Utils.distance(robot_center, bullet.position)
+            if distance <= robot.radius:
+                robot_hit.append(robot)
+        return robot_hit
 
     def col_bullet_walls(self, bullet):
         # TODO prevent bullets from glitching through the walls
