@@ -93,7 +93,6 @@ class FollowMovement(Movement):
         robot.destination = data[self.target]
         return robot.a, robot.a_alpha
 
-    # TODO Use methods for refactor
     def position(self, data, robot):
         x, y, alpha, v, v_alpha = data
 
@@ -105,68 +104,37 @@ class FollowMovement(Movement):
             destination_x = robot.destination[0]
             destination_y = robot.destination[1]
 
-        # calculating angle between the velocity vector
-        # and the destination vector
+        obj_position = (destination_x, destination_y)
+
+        # simplifying alpha and velocity
         alpha = alpha % 360
-        radian = (alpha / 180 * math.pi)
         if v == 0:
             v = 0.00001
 
-        # calculating movement vector
-        velocity_vector_x = (v * math.sin(radian))
-        velocity_vector_y = - (v * math.cos(radian))
+        # calculating velocity vector
+        velocity_vector = calculate_vector(v, alpha)
         velocity_vector_magnitude = math.sqrt(
-            velocity_vector_x**2 + velocity_vector_y**2)
+            velocity_vector[0] ** 2 + velocity_vector[1] ** 2)
 
         # calculating vector between robot and destination
-        destination_vector_x = destination_x - x
-        destination_vector_y = destination_y - y
+        destination_vector = calculate_vector_between_points(obj_position, x, y)
         destination_vector_magnitude = math.sqrt(
-            destination_vector_x**2 + destination_vector_y**2)
+            destination_vector[0] ** 2 + destination_vector[1] ** 2)
 
         # calculating the value of the angle_change needed
-        vector_multiplication = (velocity_vector_x*destination_vector_x +
-                                 velocity_vector_y*destination_vector_y)
-        magnitude_multiplication = velocity_vector_magnitude * destination_vector_magnitude
-        destination_alpha = math.acos(
-            vector_multiplication / magnitude_multiplication) - 0.01
-        destination_alpha_degree = (destination_alpha * 180 / math.pi) % 360
+        destination_alpha_degree = calculate_destination_alpha(velocity_vector, destination_vector,
+                                                               velocity_vector_magnitude,
+                                                               destination_vector_magnitude)
 
-        # determining direction based on sign of the vectors cross product
-        cross_product = calc_cross_product(
-            (velocity_vector_x, velocity_vector_y),
-            (destination_vector_x, destination_vector_y))
-        if cross_product > 0:
-            delta_alpha = destination_alpha_degree
-            direction = "right"
-        elif cross_product < 0:
-            delta_alpha = - destination_alpha_degree
-            direction = "left"
-        elif cross_product == 0:
-            delta_alpha = destination_alpha_degree
-            direction = "None"
+        # determining direction and sign of turning angle
+        direction = calculate_direction(velocity_vector, destination_vector)
+        delta_alpha = set_angle_sign(destination_alpha_degree, direction)
 
-        # setting a to accelerate to a speed of 10
-        if v <= 10:
-            a = 1
-        else:
-            a = 0
+        # setting a to accelerate to its top speed
+        v_max = 15
+        a = set_acceleration(v, v_max)
         # setting a_alpha values
-        a_alpha_max = robot.a_alpha_max
-        if direction == "right":
-            if delta_alpha >= a_alpha_max + v_alpha:
-                a_alpha = a_alpha_max
-            elif delta_alpha < a_alpha_max + v_alpha:
-                a_alpha = delta_alpha - v_alpha
-
-        elif direction == "left":
-            if abs(delta_alpha) >= abs(a_alpha_max - v_alpha):
-                a_alpha = - a_alpha_max
-            elif abs(delta_alpha) < abs(a_alpha_max - v_alpha):
-                a_alpha = -(abs(delta_alpha)) + abs(v_alpha)
-
-        if direction == "none":
-            a_alpha = 0.01
+        a_alpha = set_angle_acceleration(direction, delta_alpha, v_alpha, robot)
 
         return a, a_alpha
 
@@ -178,7 +146,6 @@ class RandomTargetMovement(Movement):
         robot.destination = (random.randint(10, 990), random.randint(10, 990))
         return robot.a, robot.a_alpha
 
-    # TODO Use methods for refactor
     def position(self, data, robot):
         x, y, alpha, v, v_alpha = data
 
@@ -189,69 +156,37 @@ class RandomTargetMovement(Movement):
         else:
             destination_x = robot.destination[0]
             destination_y = robot.destination[1]
+        obj_position = (destination_x, destination_y)
 
-        # calculating angle between the velocity vector
-        #  and the destination vector
+        # simplifying alpha and velocity
         alpha = alpha % 360
-        radian = (alpha / 180 * math.pi)
         if v == 0:
             v = 0.00001
 
-        # calculating movement vector
-        velocity_vector_x = (v * math.sin(radian))
-        velocity_vector_y = - (v * math.cos(radian))
+        # calculating velocity vector
+        velocity_vector = calculate_vector(v, alpha)
         velocity_vector_magnitude = math.sqrt(
-            velocity_vector_x ** 2 + velocity_vector_y ** 2)
+            velocity_vector[0] ** 2 + velocity_vector[1] ** 2)
 
         # calculating vector between robot and destination
-        destination_vector_x = destination_x - x
-        destination_vector_y = destination_y - y
+        destination_vector = calculate_vector_between_points(obj_position, x, y)
         destination_vector_magnitude = math.sqrt(
-            destination_vector_x ** 2 + destination_vector_y ** 2)
+            destination_vector[0] ** 2 + destination_vector[1] ** 2)
 
         # calculating the value of the angle_change needed
-        vector_multiplication = (velocity_vector_x * destination_vector_x +
-                                 velocity_vector_y * destination_vector_y)
-        magnitude_multiplication = velocity_vector_magnitude * destination_vector_magnitude
-        destination_alpha = math.acos(
-            vector_multiplication / magnitude_multiplication) - 0.01
-        destination_alpha_degree = (destination_alpha * 180 / math.pi) % 360
+        destination_alpha_degree = calculate_destination_alpha(velocity_vector, destination_vector,
+                                                               velocity_vector_magnitude,
+                                                               destination_vector_magnitude)
 
-        # determining direction based on sign of the vectors cross product
-        cross_product = calc_cross_product(
-            (velocity_vector_x, velocity_vector_y),
-            (destination_vector_x, destination_vector_y))
-        if cross_product > 0:
-            delta_alpha = destination_alpha_degree
-            direction = "right"
-        elif cross_product < 0:
-            delta_alpha = - destination_alpha_degree
-            direction = "left"
-        elif cross_product == 0:
-            delta_alpha = destination_alpha_degree
-            direction = "None"
+        # determining direction and sign of turning angle
+        direction = calculate_direction(velocity_vector, destination_vector)
+        delta_alpha = set_angle_sign(destination_alpha_degree, direction)
 
-        # setting a to accelerate to a speed of 10
-        if v <= 10:
-            a = 1
-        else:
-            a = 0
+        # setting a to accelerate to its top speed
+        v_max = 15
+        a = set_acceleration(v, v_max)
         # setting a_alpha values
-        a_alpha_max = robot.a_alpha_max
-        if direction == "right":
-            if delta_alpha >= a_alpha_max + v_alpha:
-                a_alpha = a_alpha_max
-            elif delta_alpha < a_alpha_max + v_alpha:
-                a_alpha = delta_alpha - v_alpha
-
-        elif direction == "left":
-            if abs(delta_alpha) >= abs(a_alpha_max - v_alpha):
-                a_alpha = - a_alpha_max
-            elif abs(delta_alpha) < abs(a_alpha_max - v_alpha):
-                a_alpha = -(abs(delta_alpha)) + abs(v_alpha)
-
-        if direction == "none":
-            a_alpha = 0.01
+        a_alpha = set_angle_acceleration(direction, delta_alpha, v_alpha, robot)
 
         return a, a_alpha
 
@@ -262,7 +197,6 @@ class SimpleAvoidMovement(Movement):
         robot.destination = prime_object(data)
         return robot.a, robot.a_alpha
 
-    # TODO similar to RunMovements position function
     def position(self, data, robot):
         x, y, alpha, v, v_alpha, = data
         if v == 0:
@@ -291,38 +225,14 @@ class SimpleAvoidMovement(Movement):
 
         # getting information about angle and direction
         turn_direction = calculate_direction(object_vector, velocity_vector)
-        delta_alpha = SimpleAvoidMovement.set_delta_alpha(obj_type, obj_distance,
+        delta_alpha = set_delta_alpha(obj_type, obj_distance,
                                                           threshold, obj_angle, turn_direction, v_alpha)
 
         # setting a values for a and a_alpha
         a = set_acceleration(v, v_max)
         a_alpha = set_angle_acceleration(turn_direction, delta_alpha, v_alpha, robot)
 
-        # print info
-        print_info(False, velocity_vector, object_vector, threshold, turn_direction,
-                                       delta_alpha, a, a_alpha, obj_distance, obj_angle, robot)
         return a, a_alpha
-
-    @staticmethod
-    # TODO not equal to other set_delta_alpha
-    def set_delta_alpha(obj_type, distance, threshold, obj_angle, turn_direction, v_alpha):
-        # set delta_alpha based on obstacle type and distance
-        absolute_delta_alpha = 10
-        if obj_type == "wall":
-            if distance <= threshold and turn_direction == "right":
-                delta_alpha = absolute_delta_alpha
-            elif distance <= threshold and turn_direction == "left":
-                delta_alpha = - absolute_delta_alpha
-            else:
-                delta_alpha = 0
-        if obj_type == "robot":
-            if distance <= threshold and turn_direction == "right":
-                delta_alpha = (180 - abs(obj_angle))
-            elif distance <= threshold and turn_direction == "left":
-                delta_alpha = - (180 - abs(obj_angle))
-            elif distance > threshold:
-                delta_alpha = 0
-        return delta_alpha
 
 
 class RunMovement(Movement):
@@ -336,7 +246,6 @@ class RunMovement(Movement):
         robot.destination = prime_object(data)
         return robot.a, robot.a_alpha
 
-    # TODO similar to other position function
     def position(self, data, robot):
         x, y, alpha, v, v_alpha, = data
         if v == 0:
@@ -371,46 +280,14 @@ class RunMovement(Movement):
         # getting information about angle and direction
         turn_direction = calculate_direction(object_vector, velocity_vector)
         threat_turn_direction = calculate_direction(threat_vector, velocity_vector)
-        delta_alpha = RunMovement.set_delta_alpha(obj_type, obj_distance, threshold, obj_angle, turn_direction,
+        delta_alpha = set_run_delta_alpha(obj_type, obj_distance, threshold, obj_angle, turn_direction,
                                                           v_alpha, threat_angle, threat_turn_direction,)
 
         # setting a values for a and a_alpha
         a = set_acceleration(v, v_max)
         a_alpha = set_angle_acceleration(turn_direction, delta_alpha, v_alpha, robot)
 
-        # print info
-        print_info(False, velocity_vector, object_vector, threshold, turn_direction,
-                                       delta_alpha, a, a_alpha, obj_distance, obj_angle, robot)
         return a, a_alpha
-
-    @staticmethod
-    # TODO not equal to other set_delta_alpha
-    def set_delta_alpha(obj_type, distance, threshold, obj_angle, turn_direction, v_alpha,
-                        threat_angle, threat_turn_direction):
-        # set delta_alpha based on obstacle and threat
-        absolute_delta_alpha = 20
-        if obj_type == "wall":
-            if distance <= threshold and turn_direction == "right":
-                delta_alpha = absolute_delta_alpha
-            elif distance <= threshold and turn_direction == "left":
-                delta_alpha = - absolute_delta_alpha
-
-        if obj_type == "robot":
-            if distance <= threshold and turn_direction == "right":
-                delta_alpha = (180 - abs(obj_angle))
-            elif distance <= threshold and turn_direction == "left":
-                delta_alpha = - (180 - abs(obj_angle))
-
-        smoothifier= (180 - threat_angle)/180
-        if distance > threshold:
-            if threat_turn_direction == "right":
-                delta_alpha = 20 * smoothifier
-            elif threat_turn_direction == "left":
-                delta_alpha = - 20 * smoothifier
-            elif threat_turn_direction == "none":
-                delta_alpha = 0
-
-        return delta_alpha
 
 
 class ChaseMovement(Movement):
@@ -557,6 +434,74 @@ def calculate_threshold(obj_type, v, alpha, v_alpha, v_max, robot):
     return threshold
 
 
+def calculate_destination_alpha(vec1, vec2, vec1_magnitude, vec2_magnitude):
+    vector_multiplication = (vec1[0] * vec2[0] +
+                             vec1[1] * vec2[1])
+    magnitude_multiplication = vec1_magnitude * vec2_magnitude
+    destination_alpha = math.acos(
+        vector_multiplication / magnitude_multiplication) - 0.01
+    destination_alpha_degree = (destination_alpha * 180 / math.pi) % 360
+    return destination_alpha_degree
+
+
+def set_delta_alpha(obj_type, distance, threshold, obj_angle, turn_direction, v_alpha):
+    # set delta_alpha based on obstacle type and distance
+    absolute_delta_alpha = 10
+    if obj_type == "wall":
+        if distance <= threshold and turn_direction == "right":
+            delta_alpha = absolute_delta_alpha
+        elif distance <= threshold and turn_direction == "left":
+            delta_alpha = - absolute_delta_alpha
+        else:
+            delta_alpha = 0
+    if obj_type == "robot":
+        if distance <= threshold and turn_direction == "right":
+            delta_alpha = (180 - abs(obj_angle))
+        elif distance <= threshold and turn_direction == "left":
+            delta_alpha = - (180 - abs(obj_angle))
+        elif distance > threshold:
+            delta_alpha = 0
+    return delta_alpha
+
+
+def set_run_delta_alpha(obj_type, distance, threshold, obj_angle, turn_direction, v_alpha,
+                    threat_angle, threat_turn_direction):
+    # set delta_alpha based on obstacle and threat
+    absolute_delta_alpha = 20
+    if obj_type == "wall":
+        if distance <= threshold and turn_direction == "right":
+            delta_alpha = absolute_delta_alpha
+        elif distance <= threshold and turn_direction == "left":
+            delta_alpha = - absolute_delta_alpha
+
+    if obj_type == "robot":
+        if distance <= threshold and turn_direction == "right":
+            delta_alpha = (180 - abs(obj_angle))
+        elif distance <= threshold and turn_direction == "left":
+            delta_alpha = - (180 - abs(obj_angle))
+
+    smoothifier= (180 - threat_angle)/180
+    if distance > threshold:
+        if threat_turn_direction == "right":
+            delta_alpha = 20 * smoothifier
+        elif threat_turn_direction == "left":
+            delta_alpha = - 20 * smoothifier
+        elif threat_turn_direction == "none":
+            delta_alpha = 0
+
+    return delta_alpha
+
+
+def set_angle_sign(angle, direction):
+    if direction == "right":
+        signed_angle = angle
+    elif direction == "left":
+        signed_angle = - angle
+    elif direction == "None":
+        signed_angle = angle
+    return signed_angle
+
+
 def set_angle_acceleration(direction, delta_alpha, v_alpha, robot):
     # setting a_alpha values
     a_alpha_max = robot.a_alpha_max
@@ -652,7 +597,6 @@ def print_info(boolean, velocity_vector, object_vector, threshold, turn_directio
         print("-------------------------")
 
 
-# TODO Use methods for refactor, remove self
 def position_destination_robot(self, data, robot):
     x, y, alpha, v, v_alpha = data
 
@@ -663,69 +607,33 @@ def position_destination_robot(self, data, robot):
     else:
         destination_x = robot.destination[0][0]
         destination_y = robot.destination[0][1]
-
-    # calculating angle between the velocity vector
-    # and the destination vector
-    alpha = alpha % 360
-    radian = (alpha / 180 * math.pi)
+    obj_position = (destination_x, destination_y)
     if v == 0:
         v = 0.00001
 
-    # calculating movement vector
-    velocity_vector_x = (v * math.sin(radian))
-    velocity_vector_y = - (v * math.cos(radian))
+    # calculating velocity vector
+    velocity_vector = calculate_vector(v, alpha)
     velocity_vector_magnitude = math.sqrt(
-        velocity_vector_x ** 2 + velocity_vector_y ** 2)
+        velocity_vector[0] ** 2 + velocity_vector[1] ** 2)
 
     # calculating vector between robot and destination
-    destination_vector_x = destination_x - x
-    destination_vector_y = destination_y - y
+    destination_vector = calculate_vector_between_points(obj_position, x, y)
     destination_vector_magnitude = math.sqrt(
-        destination_vector_x ** 2 + destination_vector_y ** 2)
+        destination_vector[0] ** 2 + destination_vector[1] ** 2)
 
     # calculating the value of the angle_change needed
-    vector_multiplication = (velocity_vector_x * destination_vector_x +
-                             velocity_vector_y * destination_vector_y)
-    magnitude_multiplication = velocity_vector_magnitude * destination_vector_magnitude
-    destination_alpha = math.acos(
-        vector_multiplication / magnitude_multiplication) - 0.01
-    destination_alpha_degree = (destination_alpha * 180 / math.pi) % 360
+    destination_alpha_degree = calculate_destination_alpha(velocity_vector, destination_vector,
+                                                           velocity_vector_magnitude, destination_vector_magnitude)
 
-    # determining direction based on sign of the vectors cross product
-    cross_product = calc_cross_product(
-        (velocity_vector_x, velocity_vector_y),
-        (destination_vector_x, destination_vector_y))
-    if cross_product > 0:
-        delta_alpha = destination_alpha_degree
-        direction = "right"
-    elif cross_product < 0:
-        delta_alpha = - destination_alpha_degree
-        direction = "left"
-    elif cross_product == 0:
-        delta_alpha = destination_alpha_degree
-        direction = "None"
+    # determining direction and sign of turning angle
+    direction = calculate_direction(velocity_vector, destination_vector)
+    delta_alpha = set_angle_sign(destination_alpha_degree, direction)
 
-    # setting a to accelerate to a speed of 10
-    if v <= 10:
-        a = 1
-    else:
-        a = 0
+    # setting a to accelerate to its top speed
+    v_max = 15
+    a = set_acceleration(v, v_max)
     # setting a_alpha values
-    a_alpha_max = robot.a_alpha_max
-    if direction == "right":
-        if delta_alpha >= a_alpha_max + v_alpha:
-            a_alpha = a_alpha_max
-        elif delta_alpha < a_alpha_max + v_alpha:
-            a_alpha = delta_alpha - v_alpha
-
-    elif direction == "left":
-        if abs(delta_alpha) >= abs(a_alpha_max - v_alpha):
-            a_alpha = - a_alpha_max
-        elif abs(delta_alpha) < abs(a_alpha_max - v_alpha):
-            a_alpha = -(abs(delta_alpha)) + abs(v_alpha)
-
-    if direction == "none":
-        a_alpha = 0.01
+    a_alpha = set_angle_acceleration(direction, delta_alpha, v_alpha, robot)
 
     return a, a_alpha
 
@@ -734,7 +642,7 @@ def shoot_straight(robot, data):
     x, y, alpha, v, v_alpha = data
     coordinates = robot.target
 
-    angle = SimpleAvoidMovement.calculate_angle_between_vectors(coordinates, x, y, v, alpha)
+    angle = calculate_angle_between_vectors(coordinates, x, y, v, alpha)
     ready = not (robot.is_shooting or robot.is_reloading)
     if ready:
         # set acceptable inaccuracy
@@ -746,8 +654,8 @@ def shoot_straight(robot, data):
             robot.shoot()
 
 
-# For angles < 90
 def calculate_inaccuracy(position, coordinates, alpha, vel):
+    # For angles < 90
     x = position[0]
     y = position[1]
     c_x = coordinates[0]
@@ -755,7 +663,7 @@ def calculate_inaccuracy(position, coordinates, alpha, vel):
     robot_radian = (alpha / 180 * math.pi)
 
     # get angle between aim direction and target, as radian
-    angle = SimpleAvoidMovement.calculate_angle_between_vectors(coordinates, x, y, vel, alpha)
+    angle = calculate_angle_between_vectors(coordinates, x, y, vel, alpha)
     angle = angle % 360
     target_radian = (angle / 180 * math.pi)
 
