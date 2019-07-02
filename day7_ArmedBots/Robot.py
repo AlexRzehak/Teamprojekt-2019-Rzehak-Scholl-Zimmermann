@@ -1,6 +1,7 @@
 import queue
 import threading
 import time
+import types
 from collections import deque
 
 import Utils
@@ -235,6 +236,40 @@ class RoboGun:
 
         self.reloading = True
         Utils.execute_after(1, finish_reload)
+
+    @staticmethod
+    def trigun_decorator(gun):
+        """
+        Amplifies a given gun to duplicate a successful fire task
+        into three consecutive shots over the next server ticks.
+        """
+        # we need a new variable of the gun
+        gun.trigun_count = 0
+
+        # override the old fire function
+        # TODO may be improved by just overloading the reload-check
+        def trigger_fire_trigun(self):
+            if self.reloading:
+                if self.trigun_count:
+                    self.trigun_count += -1
+                    return self.bullet_speed
+                else:
+                    return False
+
+            task = self._get_fire_task()
+            if not task:
+                return False
+            # get data by: _, task_data = task now.
+
+            self._initiate_reload()
+
+            self.trigun_count = 2
+
+            return self.bullet_speed
+
+        gun.trigger_fire = types.MethodType(trigger_fire_trigun, gun)
+
+        return gun
 
 
 class GunInterface:

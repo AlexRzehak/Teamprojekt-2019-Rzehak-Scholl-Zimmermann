@@ -81,8 +81,11 @@ class Board(QWidget):
 
         pos2 = (45, 45, 0, 0, 0)
         mv2 = ChaseMovement()
-        robo2 = self.construct_robot(TILE_SIZE * 3, mv2, 15, 10, pos2)
-        robo2.set_alert_flag()
+        gun = RoboGun()
+        RoboGun.trigun_decorator(gun)
+        robo2 = self.construct_robot(
+            TILE_SIZE * 3, mv2, 15, 10, pos2, gun=gun)
+        # robo2.set_alert_flag()
         self.deploy_robot(robo2)
 
         pos3 = (965, 35, 240, 0, 0)
@@ -92,9 +95,9 @@ class Board(QWidget):
         self.deploy_robot(robo3)
 
         pos4 = (300, 650, 70, 0, 0)
-        mv4 = RandomTargetMovement()
+        mv4 = ChaseMovement()
         robo4 = self.construct_robot(TILE_SIZE * 1, mv4, 15, 15, pos4)
-        robo4.set_alert_flag()
+        # robo4.set_alert_flag()
         self.deploy_robot(robo4)
 
         # Then add scenario recipes.
@@ -435,7 +438,7 @@ class Board(QWidget):
         position_no_col = self.calculate_position(robot, new_v, new_v_alpha)
         current_testing_position = position_no_col
 
-        # loop continues until the current position doesn't produce any collision
+        # loop until the current position doesn't produce any collision
         collided = False
 
         # calculate the boundaries of the area where tiles will be tested
@@ -504,32 +507,6 @@ class Board(QWidget):
             else:
                 break
 
-        """
-        # loop terminates when there is no collision
-        lower = 0
-        upper = new_position[3]
-        robot_center = QPoint(new_position[0], new_position[1])
-        tile_origin = QPoint(tile_x * TILE_SIZE, tile_y * TILE_SIZE)
-        if self.check_collision_circle_rect(robot_center, robot.radius,
-                                            tile_origin, TILE_SIZE, TILE_SIZE):
-            while upper >= lower:
-                mid = int((lower + upper) / 2)
-                new_position_col = self.calculate_position(
-                    robot, mid, new_position[4])
-                robot_center = QPoint(new_position_col[0], new_position_col[1])
-                # if there is a collision v has to be lower than mid
-                if self.check_collision_circle_rect(robot_center, robot.radius,
-                                                    tile_origin, TILE_SIZE, TILE_SIZE):
-                    upper = mid - 1
-                # if there is no collision v has to be higher than mid
-                else:
-                    lower = mid + 1
-            # return the amount of backtracking (0 if no collision) and the closest position that is collision free
-            return new_position[3] - lower, new_position_col
-        else:
-            return 0, new_position
-        """
-
         # return the amount of backtracing (0 if no collision) and the closest position that is collision free
         return sub_from_v, new_position_col
 
@@ -559,15 +536,14 @@ class Board(QWidget):
             if maybe_bullet:
                 self.bullets.add(maybe_bullet)
 
-    # TODO: Here, the bullet movement happens.
-    # Check for collision with walls and despawn the bullet.
-    # Check for collision with robots and kill the robot (despawn the bullet).
     def calculate_bullets(self):
+        """
+        Here, the bullet movement happens.
+        Check for collision with walls and despawn the bullet.
+        Check for collision with robots and kill the robot (despawn the bullet)
+        """
 
-        bullets_to_be_removed = set()
-        robots_hit = []
-
-        for bullet in self.bullets:
+        for bullet in self.bullets.copy():
             # move
             initial_position = bullet.position
             for test_speed in range(int(bullet.speed)):
@@ -577,33 +553,29 @@ class Board(QWidget):
                 new_position = initial_position + movement_vec
                 bullet.position = new_position
 
-                if self.col_bullet_walls(bullet):
-                    bullets_to_be_removed.add(bullet)
+                # perform collision with walls and robots
+                if (self.col_bullet_walls(bullet) or
+                        self.col_robots_bullets(bullet)):
                     break
-                else:
-                    robot_hit = self.col_robots_bullets(bullet)
-                    if robot_hit:
-                        robots_hit += robot_hit
-                        bullets_to_be_removed.add(bullet)
-                        break
 
-        for bullet in bullets_to_be_removed:
-            self.bullets.remove(bullet)
-        for robot in robots_hit:
-            # TODO implement proper respawn procedure
-            self.teleport_furthest_corner((robot.x, robot.y), robot)
+        # respawn the robots
+        for robot in self.robots:
+            if robot.dead:
+                pos = (robot.x, robot.y)
+                self.teleport_furthest_corner(pos, robot)
+                robot.dead = False
 
     def col_robots_bullets(self, bullet):
-        robot_hit = []
         for robot in self.robots:
             robot_center = (robot.x, robot.y)
             distance = Utils.distance(robot_center, bullet.position)
             if distance <= robot.radius:
-                robot_hit.append(robot)
-        return robot_hit
+                robot.dead = True
+                self.bullets.remove(bullet)
+                return True
+        return False
 
     def col_bullet_walls(self, bullet):
-        # TODO prevent bullets from glitching through the walls
         position = bullet.position
 
         tile_x = int(position[0] / TILE_SIZE)
@@ -612,7 +584,11 @@ class Board(QWidget):
         tile_y = int(position[1] / TILE_SIZE)
         tile_y = Utils.limit(tile_y, 0, Board.TileCount - 1)
 
-        return self.obstacleArray[tile_x][tile_y] != 0
+        if self.obstacleArray[tile_x][tile_y] != 0:
+            self.bullets.remove(bullet)
+            return True
+
+        return False
 
     # ==================================
     # Main Loop
@@ -735,6 +711,9 @@ class DataRobot(BaseRobot):
         self.v_alpha = 0
 
         self.gun = None
+
+        # Use this when respawning the robot
+        self.dead = False
 
         self.serial_number = DataRobot.NextSerialNumber
         DataRobot.NextSerialNumber += 1
