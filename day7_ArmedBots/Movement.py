@@ -316,11 +316,11 @@ class ChaseMovementGun(Movement):
 
     def vision(self, data, robot):
         robot.destination = search(data)
-        # execute shoot behavior
         return robot.a, robot.a_alpha
 
     def position(self, data, robot):
         x, y, alpha, v, v_alpha, = data
+        # execute shoot behaviour
         shoot_straight(robot, data)
         target_bot = robot.destination
         if type(target_bot) == bool:
@@ -332,6 +332,55 @@ class ChaseMovementGun(Movement):
         else:
             a, a_alpha = position_destination_robot(self, data, robot)
             robot.destination = None
+
+        return a, a_alpha
+
+
+class SimpleAvoidMovementGun(Movement):
+
+    def vision(self, data, robot):
+        robot.destination = prime_object(data)
+        return robot.a, robot.a_alpha
+
+    def position(self, data, robot):
+        x, y, alpha, v, v_alpha, = data
+
+        if v == 0:
+            v = 0.001
+        v_max = 10
+        tile_size = 10
+        obj_position = robot.destination[0]
+        obj_coordinates = (obj_position[0] * tile_size + 5, obj_position[1] * tile_size + 5)
+
+        if robot.destination[1] == 1 or robot.destination[1] == 2 or robot.destination[1] == 3:
+            obj_type = "wall"
+            obj_distance = robot.destination[2]
+        else:
+            obj_type = "robot"
+            obj_distance = robot.destination[1]
+
+        # calculate object angle
+        obj_angle = calculate_angle_between_vectors(obj_coordinates, x, y, v, alpha)
+
+        # calculate vectors
+        velocity_vector = calculate_vector(v, alpha)
+        object_vector = calculate_vector_between_points(obj_coordinates, x, y)
+
+        # set Threshold
+        threshold = calculate_threshold(obj_type, v, alpha, v_alpha, v_max, robot)
+
+        # getting information about angle and direction
+        turn_direction = calculate_direction(object_vector, velocity_vector)
+        delta_alpha = set_delta_alpha(obj_type, obj_distance,
+                                                          threshold, obj_angle, turn_direction, v_alpha)
+
+        # setting a values for a and a_alpha
+        a = set_acceleration(v, v_max)
+        a_alpha = set_angle_acceleration(turn_direction, delta_alpha, v_alpha, robot)
+
+        # execute shoot behaviour
+        if obj_type == "robot":
+            shoot_straight(robot, data)
 
         return a, a_alpha
 
@@ -438,8 +487,11 @@ def calculate_destination_alpha(vec1, vec2, vec1_magnitude, vec2_magnitude):
     vector_multiplication = (vec1[0] * vec2[0] +
                              vec1[1] * vec2[1])
     magnitude_multiplication = vec1_magnitude * vec2_magnitude
-    destination_alpha = math.acos(
-        vector_multiplication / magnitude_multiplication) - 0.01
+    if -1 < vector_multiplication / magnitude_multiplication < 1:
+        destination_alpha = math.acos(
+            vector_multiplication / magnitude_multiplication) - 0.01
+    else:
+        destination_alpha = 0
     destination_alpha_degree = (destination_alpha * 180 / math.pi) % 360
     return destination_alpha_degree
 
@@ -647,7 +699,7 @@ def shoot_straight(robot, data):
         ready = True
         if ready and 0.01 < angle <= 90:
             # set acceptable inaccuracy
-            max_inaccuracy = 20
+            max_inaccuracy = robot.radius
             # calculate aim inaccuracy
             inaccuracy = calculate_inaccuracy((x, y), coordinates, alpha, v)
             # decide action
