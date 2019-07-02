@@ -176,7 +176,7 @@ class SensorData:
 
 class RoboGun:
     """Mediator object between Data representation and autonomous unit."""
-    BULLET_SPEED = 10
+    BULLET_SPEED = 12
     FIRE_QUEUE_SIZE = 20
 
     def __init__(self, bullet_speed=None):

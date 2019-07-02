@@ -7,7 +7,7 @@ from PyQt5.QtCore import Qt, QPoint, QBasicTimer
 from PyQt5.QtGui import QPainter, QColor, QBrush, QPen
 from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow
 
-from Movement import FollowMovement, RandomTargetMovement, RunMovement, ChaseMovement
+from Movement import FollowMovement, RandomTargetMovement, RunMovement, ChaseMovement, ChaseMovementGun, PermanentGunMovement, SimpleAvoidMovementGun
 from Robot import BaseRobot, ThreadRobot, SensorData, RoboGun, GunInterface
 import Utils
 
@@ -73,35 +73,36 @@ class Board(QWidget):
         """
 
         # First add the robots.
-        pos1 = (500, 500, 75, 0, 0)
+        pos1 = (500, 750, 75, 0, 0)
         mv1 = RunMovement()
-        robo1 = self.construct_robot(TILE_SIZE * 4, mv1, 15, 10, pos1)
+        robo1 = self.construct_robot(TILE_SIZE * 4, mv1, 20, 10, pos1)
         robo1.set_alert_flag()
         self.deploy_robot(robo1)
 
-        pos2 = (45, 45, 0, 0, 0)
-        mv2 = ChaseMovement()
+        pos2 = (45, 845, 0, 0, 0)
+        mv2 = ChaseMovementGun(0)
         gun = RoboGun()
         RoboGun.trigun_decorator(gun)
         robo2 = self.construct_robot(
-            TILE_SIZE * 3, mv2, 15, 10, pos2, gun=gun)
+            TILE_SIZE * 3, mv2, 12, 10, pos2, gun=gun)
         # robo2.set_alert_flag()
         self.deploy_robot(robo2)
 
         pos3 = (965, 35, 240, 0, 0)
-        mv3 = FollowMovement(0)
-        robo3 = self.construct_robot(TILE_SIZE * 2, mv3, 15, 7.5, pos3)
+        mv3 = PermanentGunMovement()
+        robo3 = self.construct_robot(TILE_SIZE * 2.5, mv3, 5, 15, pos3)
         robo3.set_alert_flag()
         self.deploy_robot(robo3)
 
         pos4 = (300, 650, 70, 0, 0)
-        mv4 = ChaseMovement()
-        robo4 = self.construct_robot(TILE_SIZE * 1, mv4, 15, 15, pos4)
+        mv4 = SimpleAvoidMovementGun()
+        gun4 = RoboGun(bullet_speed=30)
+        robo4 = self.construct_robot(TILE_SIZE * 2, mv4, 15, 15, pos4, gun=gun4)
         # robo4.set_alert_flag()
         self.deploy_robot(robo4)
 
         # Then add scenario recipes.
-        self.create_catch_recipe(0, [3, 1, 2])
+        # self.create_catch_recipe(0, [3, 1, 2])
 
     def deploy_robot(self, data_robot):
         self.robots.append(data_robot)
@@ -256,21 +257,21 @@ class Board(QWidget):
         lower_limit = TILE_SIZE + robot.radius + 1
         upper_limit = FIELD_SIZE - TILE_SIZE - robot.radius - 2
 
-        up_left_corner = (lower_limit, lower_limit, 135, 0, 0)
-        up_right_corner = (lower_limit, upper_limit, 45, 0, 0)
-        down_left_corner = (upper_limit, lower_limit, 225, 0, 0)
-        down_right_corner = (upper_limit, upper_limit, 315, 0, 0)
+        top_left_corner = (lower_limit, lower_limit, 135, 0, 0)
+        bot_left_corner = (lower_limit, upper_limit, 45, 0, 0)
+        top_right_corner = (upper_limit, lower_limit, 225, 0, 0)
+        bot_right_corner = (upper_limit, upper_limit, 315, 0, 0)
 
         if point[0] > (FIELD_SIZE / 2):
             if point[1] > (FIELD_SIZE / 2):
-                position = up_left_corner
+                position = top_left_corner
             else:
-                position = up_right_corner
+                position = bot_left_corner
         else:
             if point[1] > (FIELD_SIZE / 2):
-                position = down_left_corner
+                position = top_right_corner
             else:
-                position = down_right_corner
+                position = bot_right_corner
 
         robot.place_robot(*position)
 
