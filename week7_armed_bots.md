@@ -30,7 +30,7 @@ def shoot_straight(robot, data):
             if inaccuracy <= max_inaccuracy and angle <= 90:
                 robot.shoot()
 ```
-### If the robot is not reloading or already about to shoot the robot enqueues a shot if the target is straight ahead of the robot.
+### If the robot is not reloading or already about to shoot the robot enqueues a shot if the target is straight ahead of the robot. 
 
 ## How to calculate the inaccuracy?
 ```python
@@ -59,4 +59,4 @@ def calculate_inaccuracy(position, coordinates, alpha, vel):
     inaccuracy = math.sin(target_radian) * opp_abs
     return inaccuracy
 ```
-Which geometric maths we determine the minimal distance between the projectiles path and the targets center point.
+Using geometric maths we determine the minimal distance between the projectiles path and the targets center point.
