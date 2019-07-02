@@ -645,7 +645,6 @@ def shoot_straight(robot, data):
         angle = calculate_angle_between_vectors(coordinates, x, y, v, alpha)
         # TODO set ready : not (robot.is_shooting or robot.is_reloading) <-- boolify
         ready = True
-        print(angle)
         if ready and 0.01 < angle <= 90:
             # set acceptable inaccuracy
             max_inaccuracy = 20
