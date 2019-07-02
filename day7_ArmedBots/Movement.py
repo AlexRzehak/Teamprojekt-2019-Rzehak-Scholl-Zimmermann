@@ -317,11 +317,11 @@ class ChaseMovementGun(Movement):
     def vision(self, data, robot):
         robot.destination = search(data)
         # execute shoot behavior
-        shoot_straight(robot, data)
         return robot.a, robot.a_alpha
 
     def position(self, data, robot):
         x, y, alpha, v, v_alpha, = data
+        shoot_straight(robot, data)
         target_bot = robot.destination
         if type(target_bot) == bool:
             a = 0
@@ -640,18 +640,20 @@ def position_destination_robot(self, data, robot):
 
 def shoot_straight(robot, data):
     x, y, alpha, v, v_alpha = data
-    coordinates = robot.target
-
-    angle = calculate_angle_between_vectors(coordinates, x, y, v, alpha)
-    ready = not (robot.is_shooting or robot.is_reloading)
-    if ready:
-        # set acceptable inaccuracy
-        max_inaccuracy = 20
-        # calculate aim inaccuracy
-        inaccuracy = calculate_inaccuracy((x, y), coordinates, alpha, v)
-        # decide action
-        if inaccuracy <= max_inaccuracy and angle <= 90:
-            robot.shoot()
+    if type(robot.destination) == tuple:
+        coordinates = robot.destination[0]
+        angle = calculate_angle_between_vectors(coordinates, x, y, v, alpha)
+        # TODO set ready : not (robot.is_shooting or robot.is_reloading) <-- boolify
+        ready = True
+        print(angle)
+        if ready and 0.01 < angle <= 90:
+            # set acceptable inaccuracy
+            max_inaccuracy = 20
+            # calculate aim inaccuracy
+            inaccuracy = calculate_inaccuracy((x, y), coordinates, alpha, v)
+            # decide action
+            if inaccuracy <= max_inaccuracy and angle <= 90:
+                robot.shoot()
 
 
 def calculate_inaccuracy(position, coordinates, alpha, vel):
