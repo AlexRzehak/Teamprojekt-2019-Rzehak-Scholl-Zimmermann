@@ -351,8 +351,111 @@ class Board(QWidget):
 ```
 
 ## Subtask: Move the bullets!
-# TODO LEANDER (calculate-bullet)
+### First implementation: Divided collision checks
+```python
+def calculate_bullets(self):
+    # move
+    for bullet in self.bullets:
+        self.move_bullet(bullet)
+    # collide with robots
+    self.col_robots_bullets()
+    # collide with walls
+    self.col_bullets_walls()
 
+def move_bullet(self, bullet):
+    pos = bullet.position
+
+    direction_vec = Utils.vector_from_angle(bullet.direction)
+    movement_vec = direction_vec * bullet.speed
+    new_position = pos + movement_vec
+
+    bullet.position = new_position
+
+def col_robots_bullets(self):
+    # TODO prevent bullets from glitching through robots
+    for robot in self.robots:
+        hit = False
+        robot_center = (robot.x, robot.y)
+        for bullet in self.bullets.copy():
+            distance = Utils.distance(robot_center, bullet.position)
+            if distance <= robot.radius:
+                self.bullets.remove(bullet)
+                hit = True
+        if hit:
+            # TODO implement proper respawn procedure
+            self.teleport_furthest_corner(robot_center, robot)
+
+
+def col_bullets_walls(self):
+    # TODO prevent bullets from glitching through the walls
+    for bullet in self.bullets.copy():
+        position = bullet.position
+
+        tile_x = int(position[0] / TILE_SIZE)
+        tile_x = Utils.limit(tile_x, 0, Board.TileCount - 1)
+
+        tile_y = int(position[1] / TILE_SIZE)
+        tile_y = Utils.limit(tile_y, 0, Board.TileCount - 1)
+
+        if self.obstacleArray[tile_x][tile_y] != 0:
+            self.bullets.remove(bullet)
+```
+### We need to be able to tell which object is hit first:
+```python
+def calculate_bullets(self):
+        """
+        Here, the bullet movement happens.
+        Check for collision with walls and despawn the bullet.
+        Check for collision with robots and kill the robot (despawn the bullet)
+        """
+
+        for bullet in self.bullets.copy():
+            # move
+            initial_position = bullet.position
+            for test_speed in range(int(bullet.speed)):
+
+                direction_vec = Utils.vector_from_angle(bullet.direction)
+                movement_vec = direction_vec * test_speed
+                new_position = initial_position + movement_vec
+                bullet.position = new_position
+
+                # perform collision with walls and robots
+                if (self.col_bullet_walls(bullet) or
+                        self.col_robots_bullets(bullet)):
+                    break
+
+        # respawn the robots
+        for robot in self.robots:
+            if robot.dead:
+                pos = (robot.x, robot.y)
+                self.teleport_furthest_corner(pos, robot)
+                robot.dead = False
+
+    def col_robots_bullets(self, bullet):
+        for robot in self.robots:
+            robot_center = (robot.x, robot.y)
+            distance = Utils.distance(robot_center, bullet.position)
+            if distance <= robot.radius:
+                robot.dead = True
+                self.bullets.remove(bullet)
+                return True
+        return False
+
+    def col_bullet_walls(self, bullet):
+        position = bullet.position
+
+        tile_x = int(position[0] / TILE_SIZE)
+        tile_x = Utils.limit(tile_x, 0, Board.TileCount - 1)
+
+        tile_y = int(position[1] / TILE_SIZE)
+        tile_y = Utils.limit(tile_y, 0, Board.TileCount - 1)
+
+        if self.obstacleArray[tile_x][tile_y] != 0:
+            self.bullets.remove(bullet)
+            return True
+        return False
+```
+                self.bullets.remove(bullet)
 ## Problem: Sequencing
 ### Now, that we have a way to create bullets, move bullets and calculate collision, we need to ponder, in which order we want to perform these events in the main loop, since they cannot be done at once.
 ### This is a non-trivial manner since moving robots and bullets in different order might achieve different outcomes:
