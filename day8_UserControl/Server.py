@@ -97,7 +97,8 @@ class Board(QWidget):
         pos4 = (300, 650, 70, 0, 0)
         mv4 = SimpleAvoidMovementGun()
         gun4 = RoboGun(bullet_speed=30)
-        robo4 = self.construct_robot(TILE_SIZE * 2, mv4, 15, 15, pos4, gun=gun4)
+        robo4 = self.construct_robot(
+            TILE_SIZE * 2, mv4, 15, 15, pos4, gun=gun4)
         # robo4.set_alert_flag()
         self.deploy_robot(robo4)
 
@@ -148,6 +149,7 @@ class Board(QWidget):
         qp.save()
         source = QRectF(0, 0, 1125, 1125)
         target = QRectF(0, 0, 1000, 1000)
+        qp.setOpacity(0.7)
         qp.drawPixmap(target, texture, source)
         qp.restore()
 
@@ -162,7 +164,8 @@ class Board(QWidget):
                     texture = QPixmap("textures/wall.png")
                     qp.save()
                     source = QRectF(0, 0, 10, 10)
-                    target = QRectF(xpos * TILE_SIZE, ypos * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                    target = QRectF(xpos * TILE_SIZE, ypos *
+                                    TILE_SIZE, TILE_SIZE, TILE_SIZE)
                     qp.drawPixmap(target, texture, source)
                     qp.restore()
 
@@ -170,7 +173,8 @@ class Board(QWidget):
                     texture = QPixmap("textures/border.png")
                     qp.save()
                     source = QRectF(0, 0, 10, 10)
-                    target = QRectF(xpos * TILE_SIZE, ypos * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                    target = QRectF(xpos * TILE_SIZE, ypos *
+                                    TILE_SIZE, TILE_SIZE, TILE_SIZE)
                     qp.drawPixmap(target, texture, source)
                     qp.restore()
 
@@ -178,7 +182,8 @@ class Board(QWidget):
                     texture = QPixmap("textures/hole.png")
                     qp.save()
                     source = QRectF(0, 0, 10, 10)
-                    target = QRectF(xpos * TILE_SIZE, ypos * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                    target = QRectF(xpos * TILE_SIZE, ypos *
+                                    TILE_SIZE, TILE_SIZE, TILE_SIZE)
                     qp.drawPixmap(target, texture, source)
                     qp.restore()
 
@@ -189,7 +194,8 @@ class Board(QWidget):
         qp.translate(robot.x, robot.y)
         qp.rotate(robot.alpha)
         source = QRectF(0, 0, 567, 566)
-        target = QRectF(-robot.radius, -robot.radius, 2*robot.radius, 2*robot.radius)
+        target = QRectF(-robot.radius, -robot.radius,
+                        2*robot.radius, 2*robot.radius)
         qp.drawPixmap(target, texture, source)
         qp.restore()
 
@@ -200,7 +206,8 @@ class Board(QWidget):
             qp.save()
             qp.translate(bullet.position[0], bullet.position[1])
             source = QRectF(0, 0, 715, 715)
-            target = QRectF(-bullet_radius, -bullet_radius, 2*bullet_radius, 2* bullet_radius)
+            target = QRectF(-bullet_radius, -bullet_radius,
+                            2*bullet_radius, 2 * bullet_radius)
             qp.drawPixmap(target, texture, source)
             qp.restore()
 
