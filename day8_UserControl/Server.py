@@ -132,7 +132,6 @@ class Board(QWidget):
     # ==================================
     # Painter Area
     # ==================================
-
     def paintEvent(self, e):
 
         qp = QPainter()
@@ -160,34 +159,36 @@ class Board(QWidget):
                 tileVal = self.obstacleArray[xpos][ypos]
 
                 if tileVal == Hazard.Wall:
-                    brush = QBrush(Qt.Dense2Pattern)
-                    brush.setColor(Qt.red)
-                    qp.setBrush(brush)
-                    qp.drawRect(xpos * TILE_SIZE,
-                                ypos * TILE_SIZE,
-                                TILE_SIZE, TILE_SIZE)
+                    texture = QPixmap("textures/wall.png")
+                    qp.save()
+                    source = QRectF(0, 0, 10, 10)
+                    target = QRectF(xpos * TILE_SIZE, ypos * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                    qp.drawPixmap(target, texture, source)
+                    qp.restore()
 
                 elif tileVal == Hazard.Border:
-                    brush = QBrush(Qt.Dense2Pattern)
-                    brush.setColor(Qt.blue)
-                    qp.setBrush(brush)
-                    qp.drawRect(xpos * TILE_SIZE,
-                                ypos * TILE_SIZE,
-                                TILE_SIZE, TILE_SIZE)
+                    texture = QPixmap("textures/border.png")
+                    qp.save()
+                    source = QRectF(0, 0, 10, 10)
+                    target = QRectF(xpos * TILE_SIZE, ypos * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                    qp.drawPixmap(target, texture, source)
+                    qp.restore()
 
                 elif tileVal == Hazard.Hole:
-                    qp.setBrush(Qt.black)
-                    center = QPoint(xpos * TILE_SIZE + 0.5 * TILE_SIZE,
-                                    ypos * TILE_SIZE + 0.5 * TILE_SIZE)
-                    qp.drawEllipse(center, 0.5 * TILE_SIZE, 0.25 * TILE_SIZE)
+                    texture = QPixmap("textures/hole.png")
+                    qp.save()
+                    source = QRectF(0, 0, 10, 10)
+                    target = QRectF(xpos * TILE_SIZE, ypos * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                    qp.drawPixmap(target, texture, source)
+                    qp.restore()
 
     def drawRobot(self, qp, robot):
 
         texture = QPixmap("textures/robot.png")
         qp.save()
-        qp.translate(robot.x ,robot.y)
+        qp.translate(robot.x, robot.y)
         qp.rotate(robot.alpha)
-        source = QRectF(0, 0, 566, 566)
+        source = QRectF(0, 0, 567, 566)
         target = QRectF(-robot.radius, -robot.radius, 2*robot.radius, 2*robot.radius)
         qp.drawPixmap(target, texture, source)
         qp.restore()
