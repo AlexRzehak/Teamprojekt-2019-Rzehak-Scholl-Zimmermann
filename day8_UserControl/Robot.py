@@ -72,6 +72,15 @@ class ThreadRobot(BaseRobot):
         self.thread.daemon = True
         self.thread.start()
 
+    def clear_input(self):
+        # never use join
+        self._sensor_queue.queue.clear()
+
+    def clear_values(self):
+        self.a = 0
+        self.a_alpha = 0
+        self.destination = None
+
     # Interface Functions
     def send_action_data(self):
         return self.a, self.a_alpha
@@ -186,6 +195,10 @@ class RoboGun:
             self.bullet_speed = RoboGun.BULLET_SPEED
         self.reloading = False
         self.fire_queue = queue.Queue(RoboGun.FIRE_QUEUE_SIZE)
+
+    def clear_input(self):
+        # never use join
+        self.fire_queue.queue.clear()
 
     def is_preparing(self):
         return not self.fire_queue.empty()

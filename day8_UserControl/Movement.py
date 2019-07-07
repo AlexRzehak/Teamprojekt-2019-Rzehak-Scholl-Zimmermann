@@ -155,6 +155,8 @@ class RandomTargetMovement(Movement):
         if not robot.destination:
             destination_x = x
             destination_y = y
+            # TODO fix stuff
+            return robot.a, robot.a_alpha
         else:
             destination_x = robot.destination[0]
             destination_y = robot.destination[1]
