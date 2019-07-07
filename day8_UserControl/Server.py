@@ -89,7 +89,8 @@ class Board(QWidget):
         # First add the robots.
         pos1 = (500, 750, 75, 0, 0)
         mv1 = RunMovement()
-        robo1 = self.construct_robot(TILE_SIZE * 4, mv1, 20, 10, pos1)
+        robo1 = self.construct_robot(TILE_SIZE * 4, mv1, 20, 10, pos1,
+                                     max_life=5)
         robo1.set_alert_flag()
         self.deploy_robot(robo1)
 
@@ -98,13 +99,14 @@ class Board(QWidget):
         gun = RoboGun()
         RoboGun.trigun_decorator(gun)
         robo2 = self.construct_robot(
-            TILE_SIZE * 3, mv2, 12, 10, pos2, gun=gun)
+            TILE_SIZE * 3, mv2, 12, 10, pos2, gun=gun, max_life=1)
         # robo2.set_alert_flag()
         self.deploy_robot(robo2)
 
         pos3 = (965, 35, 240, 0, 0)
         mv3 = PermanentGunMovement()
-        robo3 = self.construct_robot(TILE_SIZE * 2.5, mv3, 5, 15, pos3)
+        robo3 = self.construct_robot(TILE_SIZE * 2.5, mv3, 5, 15, pos3,
+                                     max_life=1)
         robo3.set_alert_flag()
         pc = PlayerControl(robo3, ControlScheme.player_two_scheme)
         robo3.setup_player_control(pc)
@@ -154,14 +156,16 @@ class Board(QWidget):
             self.stateless_keys[key] = tuple(value)
 
     def construct_robot(self, radius, movement_funct, a_max, a_alpha_max,
-                        position, fov_angle=90, gun=None):
+                        position, fov_angle=90,
+                        max_life=3, respawn_timer=3, gun=None):
         """
         Create a new robot with given parameters.
         You can add it to the board using deploy_robot().
         """
 
         # Create robot body with its set parameters.
-        base_robot = BaseRobot(radius, a_max, a_alpha_max, fov_angle)
+        base_robot = BaseRobot(radius, a_max, a_alpha_max, fov_angle,
+                               max_life, respawn_timer)
 
         # Create autonomous robot unit.
         thread_robot = ThreadRobot(base_robot, movement_funct)
@@ -277,7 +281,7 @@ class Board(QWidget):
             fugitive_bot = board.robots[fugitive]
             fugitive_pos = (fugitive_bot.x, fugitive_bot.y)
             hunter_bot = board.robots[hunter]
-            board.teleport_furthest_corner(fugitive_pos, hunter_bot)
+            Board.teleport_furthest_corner(fugitive_pos, hunter_bot)
 
         for h in hunters:
             f = partial(callee, h)
@@ -290,32 +294,6 @@ class Board(QWidget):
         """
         if col_tuple in self.collision_scenarios:
             self.collision_scenarios[col_tuple](self)
-
-    def teleport_furthest_corner(self, point, robot):
-        """Teleports the robot to a position in the corner
-        with the largest distance from point.
-        """
-
-        lower_limit = TILE_SIZE + robot.radius + 1
-        upper_limit = FIELD_SIZE - TILE_SIZE - robot.radius - 2
-
-        top_left_corner = (lower_limit, lower_limit, 135, 0, 0)
-        bot_left_corner = (lower_limit, upper_limit, 45, 0, 0)
-        top_right_corner = (upper_limit, lower_limit, 225, 0, 0)
-        bot_right_corner = (upper_limit, upper_limit, 315, 0, 0)
-
-        if point[0] > (FIELD_SIZE / 2):
-            if point[1] > (FIELD_SIZE / 2):
-                position = top_left_corner
-            else:
-                position = bot_left_corner
-        else:
-            if point[1] > (FIELD_SIZE / 2):
-                position = top_right_corner
-            else:
-                position = bot_right_corner
-
-        robot.place_robot(*position)
 
     # ==================================
     # Vision Area
@@ -604,18 +582,19 @@ class Board(QWidget):
                     break
 
         # respawn the robots
-        for robot in self.robots:
-            if robot.dead:
-                pos = (robot.x, robot.y)
-                self.teleport_furthest_corner(pos, robot)
-                robot.dead = False
+        # for robot in self.robots:
+        #     if robot.dead:
+        #         pos = (robot.x, robot.y)
+        #         Board.teleport_furthest_corner(pos, robot)
+        #         robot.dead = False
 
     def col_robots_bullets(self, bullet):
         for robot in self.robots:
             robot_center = (robot.x, robot.y)
             distance = Utils.distance(robot_center, bullet.position)
             if distance <= robot.radius:
-                robot.dead = True
+                robot.deal_damage()
+                # robot.dead = True
                 self.bullets.remove(bullet)
                 return True
         return False
@@ -811,6 +790,10 @@ class Board(QWidget):
         data = (board_data, robot_data)
         return SensorData(SensorData.VISION_STRING, data, self.time_stamp)
 
+    # ==================================
+    # Static positioning methods
+    # ==================================
+
     @staticmethod
     def place_robot(robot, x, y, alpha, v, v_alpha):
         """Re-places a robot with given position values.
@@ -821,6 +804,33 @@ class Board(QWidget):
         robot.alpha = alpha
         robot.v = v
         robot.v_alpha = v_alpha
+
+    @staticmethod
+    def teleport_furthest_corner(point, robot):
+        """Teleports the robot to a position in the corner
+        with the largest distance from point.
+        """
+
+        lower_limit = TILE_SIZE + robot.radius + 1
+        upper_limit = FIELD_SIZE - TILE_SIZE - robot.radius - 2
+
+        top_left_corner = (lower_limit, lower_limit, 135, 0, 0)
+        bot_left_corner = (lower_limit, upper_limit, 45, 0, 0)
+        top_right_corner = (upper_limit, lower_limit, 225, 0, 0)
+        bot_right_corner = (upper_limit, upper_limit, 315, 0, 0)
+
+        if point[0] > (FIELD_SIZE / 2):
+            if point[1] > (FIELD_SIZE / 2):
+                position = top_left_corner
+            else:
+                position = bot_left_corner
+        else:
+            if point[1] > (FIELD_SIZE / 2):
+                position = top_right_corner
+            else:
+                position = bot_right_corner
+
+        robot.place_robot(*position)
 
 
 class Hazard:
@@ -861,6 +871,7 @@ class DataRobot(BaseRobot):
         # Use this when respawning the robot
         self.dead = False
         self.immune = False
+        self.life = self.max_life
 
         # Access management system:
         # inactive TODO
@@ -907,17 +918,47 @@ class DataRobot(BaseRobot):
             self.thread_robot.receive_sensor_data(data)
 
     # damage and respawn
-    def deal_damage():
-        # TODO
-        pass
+    def deal_damage(self, damage=1):
+        # we don't deal damage to dead or immune units
+        if self.immune or self.dead:
+            return
 
-    def get_destroyed():
-        # TODO
-        pass
+        self.life = max(0, self.life - damage)
+        if self.life == 0:
+            self.get_destroyed()
 
-    def respawn():
-        # TODO
-        pass
+    def get_destroyed(self):
+        self.dead = True
+
+        self.v = 0
+        self.v_alpha = 0
+
+        self.disable_robot_control()
+        self.disable_player_control()
+        self.disable_gun()
+
+        def respawn():
+            self.respawn()
+
+        Utils.execute_after(self.respawn_timer, respawn)
+
+    def respawn(self):
+        self.life = self.max_life
+        self.immune = True
+        point = self.x, self.y
+        Board.teleport_furthest_corner(point, self)
+
+        if self.player_control_active:
+            self.hand_control_to_player()
+        else:
+            self.hand_control_to_robot()
+
+        self.dead = False
+
+        def disable_immunity():
+            self.immune = False
+
+        Utils.execute_after(1, disable_immunity)
 
     # gun stuff
     def perform_shoot_action(self):
@@ -1019,7 +1060,7 @@ class DataRobot(BaseRobot):
         self.thread_robot.clear_input()
 
     def enable_robot_control(self):
-        # maybe clear input as well
+        self.thread_robot.clear_input()
         self.thread_robot.clear_values()
         self.robot_input_enabled = True
         self.robot_output_enabled = True
