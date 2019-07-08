@@ -516,10 +516,13 @@ def calculate_destination_alpha(vec1, vec2, vec1_magnitude, vec2_magnitude):
     vector_multiplication = (vec1[0] * vec2[0] +
                              vec1[1] * vec2[1])
     magnitude_multiplication = vec1_magnitude * vec2_magnitude
-    if -1 < vector_multiplication / magnitude_multiplication < 1:
-        destination_alpha = math.acos(
-            vector_multiplication / magnitude_multiplication) - 0.01
-    else:
+    if magnitude_multiplication != 0:
+        if -1 < vector_multiplication / magnitude_multiplication < 1:
+            destination_alpha = math.acos(
+                vector_multiplication / magnitude_multiplication) - 0.01
+        else:
+            destination_alpha = 0
+    elif magnitude_multiplication == 0:
         destination_alpha = 0
     destination_alpha_degree = (destination_alpha * 180 / math.pi) % 360
     return destination_alpha_degree
@@ -578,7 +581,7 @@ def set_angle_sign(angle, direction):
         signed_angle = angle
     elif direction == "left":
         signed_angle = - angle
-    elif direction == "None":
+    elif direction == "none":
         signed_angle = angle
     return signed_angle
 
