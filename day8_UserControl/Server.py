@@ -190,7 +190,7 @@ class Board(QWidget):
         qp.save()
         source = QRectF(0, 0, 1125, 1125)
         target = QRectF(0, 0, 1000, 1000)
-        qp.setOpacity(0.7)
+        qp.setOpacity(1)
         qp.drawPixmap(target, texture, source)
         qp.restore()
 
@@ -229,15 +229,54 @@ class Board(QWidget):
                     qp.restore()
 
     def drawRobot(self, qp, robot):
-
         texture = QPixmap("textures/robot.png")
+        overlay = QRectF(robot.x - robot.radius, robot.y - robot.radius, 2 * robot.radius, 2 * robot.radius)
         qp.save()
+
+        if robot.life / robot.max_life == 0:
+            life_frac = 0.01
+        elif robot.life / robot.max_life >= 0:
+            life_frac = robot.life / robot.max_life
+        # setting opacity
+        robot_op = 1
+        overlay_op = 1
+        if robot.dead or robot.immune:
+            robot_op = 0.7
+            overlay_op = 1
+
+        # painting overlay:
+        # setting the color to represent health
+        if robot.immune:
+            R = 0
+            G = 0
+            B = 255
+            A = 100
+        elif not robot.dead:
+            R = 255 * (1 - life_frac)
+            G = 255 * life_frac
+            B = 0
+            A = 255
+        elif robot.dead:
+            R = 10
+            G = 10
+            B = 10
+            A = 255
+        qp.setBrush(QColor(R, G, B, A))
+        # drawing overlay
+        qp.setOpacity(overlay_op)
+        qp.drawEllipse(overlay)
+
+        # painting robot:
+        # mapping the texture to the robot
         qp.translate(robot.x, robot.y)
         qp.rotate(robot.alpha)
         source = QRectF(0, 0, 567, 566)
         target = QRectF(-robot.radius, -robot.radius,
-                        2*robot.radius, 2*robot.radius)
+                        2 * robot.radius, 2 * robot.radius)
+        # drawing the robot
+        qp.setOpacity(robot_op)
         qp.drawPixmap(target, texture, source)
+
         qp.restore()
 
     def drawBullets(self, qp):
