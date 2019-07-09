@@ -1,4 +1,4 @@
-# Week 7: Give Guns to the Robots
+# Week 8: Adding User Input
 
 ### [<- Back](/index.md) to project overview.
 
