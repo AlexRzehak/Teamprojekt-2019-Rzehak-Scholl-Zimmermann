@@ -204,7 +204,7 @@ class Board(QWidget):
         qp.save()
         source = QRectF(0, 0, 1125, 1125)
         target = QRectF(0, 0, 1000, 1000)
-        qp.setOpacity(0.7)
+        qp.setOpacity(1)
         qp.drawPixmap(target, texture, source)
         qp.restore()
 
@@ -252,7 +252,7 @@ class Board(QWidget):
         elif robot.life / robot.max_life >= 0:
             life_frac = robot.life / robot.max_life
         # setting opacity
-        robot_op = 0.7 + 0.3 * life_frac
+        robot_op = 1
         overlay_op = 1
         if robot.dead or robot.immune:
             robot_op = 0.7
