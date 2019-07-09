@@ -608,12 +608,16 @@ def set_run_delta_alpha(obj_type, distance, threshold, obj_angle, turn_direction
             delta_alpha = absolute_delta_alpha
         elif distance <= threshold and turn_direction == "left":
             delta_alpha = - absolute_delta_alpha
+        elif distance <= threshold and turn_direction == "none":
+            delta_alpha = 0
 
     if obj_type == "robot":
         if distance <= threshold and turn_direction == "right":
             delta_alpha = (180 - abs(obj_angle))
         elif distance <= threshold and turn_direction == "left":
             delta_alpha = - (180 - abs(obj_angle))
+        elif distance <= threshold and turn_direction == "none":
+            delta_alpha = 0
 
     smoothifier = (180 - threat_angle)/180
     if distance > threshold:
