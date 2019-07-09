@@ -318,10 +318,13 @@ class ChaseMovement(Movement):
         x, y, alpha, v, v_alpha, = data
         target_bot = robot.destination
         if type(target_bot) == bool:
+            # set values to look around
             a = 0
-            if v_alpha < robot.a_alpha_max:
+            if v_alpha < 0 and abs(v_alpha) < robot.a_alpha_max:
+                a_alpha = - 1
+            elif v_alpha >= 0 and abs(v_alpha) < robot.a_alpha_max:
                 a_alpha = 1
-            elif v_alpha >= robot.a_alpha_max:
+            elif abs(v_alpha) >= robot.a_alpha_max:
                 a_alpha = 0
         else:
             a, a_alpha = position_destination_robot(self, data, robot)
@@ -413,6 +416,52 @@ class PermanentGunMovement(RandomTargetMovement):
 
     def position(self, data, robot):
         robot.shoot()
+        return super().position(data, robot)
+
+
+class ChaseAvoidMovement(Movement):
+
+    def __init__(self, target):
+        self.target = target
+
+    def vision(self, data, robot):
+        # determine if a obstacle needs to be avoided
+        dist_index = len(prime_object(data)) - 1
+        obj_dist = prime_object(data)[dist_index]
+        is_wall = (dist_index == 2)
+        act_dist = 100
+        if is_wall:
+            avoid = (obj_dist < act_dist)
+        else:
+            avoid = False
+
+        # case AvoidMovement
+        if avoid:
+            robot.destination = prime_object(data)
+            return robot.a, robot.a_alpha
+        # case ChaseMovement
+        else:
+            robot.destination = search(data, self.target)
+            return robot.a, robot.a_alpha
+
+    def position(self, data, robot):
+        # determine whether destination is a target or obstacle
+        if type(robot.destination) == bool:
+            destination_type = "target"
+        elif len(robot.destination) == 2:
+            destination_type = "target"
+        else:
+            destination_type = "obstacle"
+        if destination_type == "obstacle":
+            a, a_alpha = SimpleAvoidMovement.position(self, data, robot)
+        else:
+            a, a_alpha = ChaseMovement.position(self, data, robot)
+        return a, a_alpha
+
+
+class ChaseAvoidMovementGun(ChaseAvoidMovement):
+    def position(self, data, robot):
+        shoot_straight(robot, data)
         return super().position(data, robot)
 
 
@@ -518,10 +567,13 @@ def calculate_destination_alpha(vec1, vec2, vec1_magnitude, vec2_magnitude):
     vector_multiplication = (vec1[0] * vec2[0] +
                              vec1[1] * vec2[1])
     magnitude_multiplication = vec1_magnitude * vec2_magnitude
-    if -1 < vector_multiplication / magnitude_multiplication < 1:
-        destination_alpha = math.acos(
-            vector_multiplication / magnitude_multiplication) - 0.01
-    else:
+    if magnitude_multiplication != 0:
+        if -1 < vector_multiplication / magnitude_multiplication < 1:
+            destination_alpha = math.acos(
+                vector_multiplication / magnitude_multiplication) - 0.01
+        else:
+            destination_alpha = 0
+    elif magnitude_multiplication == 0:
         destination_alpha = 0
     destination_alpha_degree = (destination_alpha * 180 / math.pi) % 360
     return destination_alpha_degree
@@ -580,7 +632,7 @@ def set_angle_sign(angle, direction):
         signed_angle = angle
     elif direction == "left":
         signed_angle = - angle
-    elif direction == "None":
+    elif direction == "none":
         signed_angle = angle
     return signed_angle
 
