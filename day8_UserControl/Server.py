@@ -530,12 +530,12 @@ class Board(QWidget):
 
         # if any iteration produced any collisions : v = 0
         if collided:
-            if tile_type == 1:
+            if tile_type == 3:
+                # TODO: insert behavior for col with holes
+                #   (and delete this:)
                 final_pos_col = (final_pos_col[0], final_pos_col[1],
                                  final_pos_col[2], 0, final_pos_col[4])
-            else:
-                # TODO: insert behavior for other tile_types
-                #   (and delete this:)
+            else:                
                 final_pos_col = (final_pos_col[0], final_pos_col[1],
                                  final_pos_col[2], 0, final_pos_col[4])
         # if there was na collision at all, the original position is returned
