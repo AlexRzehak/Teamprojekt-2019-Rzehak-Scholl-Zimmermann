@@ -505,7 +505,8 @@ class Board(QWidget):
             # tests all 100x100 tiles in the array for collision
             for tile_x in range(leftmost_tile, rightmost_tile):
                 for tile_y in range(upmost_tile, downmost_tile):
-                    if self.obstacleArray[tile_x][tile_y] != 0:
+                    tile_type = self.obstacleArray[tile_x][tile_y]
+                    if tile_type:
 
                         # takes the position where it doesn't collide
                         # and the amount it backtracked
@@ -516,6 +517,7 @@ class Board(QWidget):
                         if abs(sub) > abs(max_sub):
                             max_sub = sub
                             final_pos_col = current_pos_col
+                            final_tile_type = tile_type
 
             # if this iteration (one position) produced any collisions
             # the final position gets tested again
@@ -528,8 +530,14 @@ class Board(QWidget):
 
         # if any iteration produced any collisions : v = 0
         if collided:
-            final_pos_col = (final_pos_col[0], final_pos_col[1],
-                             final_pos_col[2], 0, final_pos_col[4])
+            if tile_type == 1:
+                final_pos_col = (final_pos_col[0], final_pos_col[1],
+                                 final_pos_col[2], 0, final_pos_col[4])
+            else:
+                # TODO: insert behavior for other tile_types
+                #   (and delete this:)
+                final_pos_col = (final_pos_col[0], final_pos_col[1],
+                                 final_pos_col[2], 0, final_pos_col[4])
         # if there was na collision at all, the original position is returned
         else:
             final_pos_col = position_no_col
