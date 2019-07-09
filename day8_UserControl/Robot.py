@@ -9,13 +9,16 @@ import Utils
 
 class BaseRobot:
 
-    def __init__(self, radius, a_max, a_alpha_max,
+    def __init__(self, radius, a_max, a_alpha_max, v_max=39, v_alpha_max=90, 
                  fov_angle=90, max_life=3, respawn_timer=3):
         # set parameters
         self.radius = radius
 
         self.a_max = a_max
         self.a_alpha_max = a_alpha_max
+
+        self.v_max = v_max
+        self.v_alpha_max = v_alpha_max
 
         self.fov_angle = fov_angle
 
@@ -200,6 +203,9 @@ class RoboGun:
         self.reloading = False
         self.fire_queue = queue.Queue(RoboGun.FIRE_QUEUE_SIZE)
 
+        self.gun_access_player = False
+        self.gun_access_robot = False
+
     def clear_input(self):
         # never use join
         self.fire_queue.queue.clear()
@@ -210,7 +216,22 @@ class RoboGun:
     def is_reloading(self):
         return self.reloading
 
-    def prepare_fire(self, data=True):
+    def set_gun_access_player(self, value):
+        self.gun_access_player = value
+
+    def set_gun_access_robot(self, value):
+        self.gun_access_robot = value
+
+    def prepare_fire_robot(self, data=True):
+        if self.gun_access_robot:
+            self.prepare_fire(data)
+
+    def prepare_fire_player(self, data=True):
+        if self.gun_access_player:
+            if not (self.is_preparing() or self.is_reloading()):
+                self.prepare_fire(data)
+
+    def prepare_fire(self, data):
         # More complex data might be used later.
         try:
             self.fire_queue.put(data, block=False)
@@ -294,4 +315,4 @@ class GunInterface:
 
         self.is_preparing = gun.is_preparing
         self.is_reloading = gun.is_reloading
-        self.prepare_fire = gun.prepare_fire
+        self.prepare_fire = gun.prepare_fire_robot
