@@ -5,7 +5,7 @@
 ### Up until now, we were nothing but passive observers. It's time to get cookin' as well!
 
 ## Measurement: Numbers, Facts, Data
-### But before we hop intothis weeks task, let's discuss something else:<br/> Our Program has become quite big with the time and because of all the features, it got a bit laggy.<br/> Now we want to analyse this in more detail.
+### But before we hop into this weeks task, let's discuss something else:<br/> Our Program has become quite big with the time and because of all the features, it got a bit laggy.<br/> Now we want to analyse this in more detail.
 
 ### We use the `default_timer()` oder python's very precise `timeit` library to check the runtime of each part of the program.
 ```python
@@ -945,8 +945,7 @@ If it is dead or immune set the robots opacity below 1 so it becomes slightly tr
 
 # Task: Fixes and Improvements
 ### There was also a lot of space for bug fixes encountered while setting up the player control as well as general code improvements.
-# TODO TIM
-# TODO LEANDER
+## Let's take a look at the code!
 
 # Additional Features
 ## Invasive Controls
