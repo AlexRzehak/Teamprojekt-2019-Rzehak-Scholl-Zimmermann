@@ -996,5 +996,19 @@ class PlayerControl:
         self.lr_lookup = { # [...] }
 ```
 ### With this option set, we now have much simpler access to the robot's movement.
+## Damage from holes
+### since the start we had an additional wall type: holes
+```python
+def col_robots_walls(self, robot, new_v, new_v_alpha):
+...
+        # if there was na collision at all, the original position is returned
+        if not collided:
+            final_pos_col = position_no_col
 
+        elif final_tile_type == 3:
+            # TODO: change behavior for hitting a hole here
+            robot.deal_damage()
+
+        return final_pos_col
+```
 # Are we controlling the robots or are the robots controlling us, Elon?
