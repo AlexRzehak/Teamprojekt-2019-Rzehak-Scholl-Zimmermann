@@ -7,7 +7,7 @@ from PyQt5.QtCore import Qt, QPoint, QBasicTimer, QRectF
 from PyQt5.QtGui import QPainter, QColor, QBrush, QPen, QPixmap
 from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow
 
-from Movement import FollowMovement, RandomTargetMovement, RunMovement, ChaseMovement, ChaseMovementGun, PermanentGunMovement, SimpleAvoidMovementGun, SimpleAvoidMovement
+from Movement import FollowMovement, RandomTargetMovement, RunMovement, ChaseMovement, ChaseMovementGun, PermanentGunMovement, SimpleAvoidMovementGun, SimpleAvoidMovement, ChaseAvoidMovementGun
 from Robot import BaseRobot, ThreadRobot, SensorData, RoboGun, GunInterface
 import Utils
 
@@ -91,21 +91,22 @@ class Board(QWidget):
         RoboGun.trigun_decorator(gun)
         robo2 = self.construct_robot(
             TILE_SIZE * 3, mv2, 12, 10, pos2, gun=gun, max_life=1)
+        robo2.setup_player_control(control_scheme=ControlScheme.player_two_scheme)
         # robo2.set_alert_flag()
         self.deploy_robot(robo2)
 
         pos3 = (965, 35, 240, 0, 0)
         mv3 = PermanentGunMovement()
         robo3 = self.construct_robot(TILE_SIZE * 2.5, mv3, 5, 15, pos3,
-                                     v_max=12, v_alpha_max=30, max_life=3)
+                                     v_max=12, v_alpha_max=30)
         robo3.set_alert_flag()
-        pc = PlayerControl(robo3, ControlScheme.player_two_scheme,
+        pc = PlayerControl(robo3, ControlScheme.default_scheme,
                            invasive_controls=True, alpha_accel_amt=10)
         robo3.setup_player_control(pc)
         self.deploy_robot(robo3)
 
         pos4 = (300, 650, 70, 0, 0)
-        mv4 = SimpleAvoidMovementGun()
+        mv4 = ChaseAvoidMovementGun(0)
         gun4 = RoboGun(bullet_speed=30)
         robo4 = self.construct_robot(
             TILE_SIZE * 2, mv4, 15, 15, pos4, gun=gun4)
