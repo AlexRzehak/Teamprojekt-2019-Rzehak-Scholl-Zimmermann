@@ -594,7 +594,7 @@ def set_delta_alpha(obj_type, distance, threshold, obj_angle, turn_direction, v_
             delta_alpha = (180 - abs(obj_angle))
         elif distance <= threshold and turn_direction == "left":
             delta_alpha = - (180 - abs(obj_angle))
-        elif distance > threshold:
+        else:
             delta_alpha = 0
     return delta_alpha
 
