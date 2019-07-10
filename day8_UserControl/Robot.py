@@ -9,7 +9,7 @@ import Utils
 
 class BaseRobot:
 
-    def __init__(self, radius, a_max, a_alpha_max, v_max=39, v_alpha_max=90, 
+    def __init__(self, radius, a_max, a_alpha_max, v_max=39, v_alpha_max=90,
                  fov_angle=90, max_life=3, respawn_timer=3):
         # set parameters
         self.radius = radius
@@ -24,10 +24,6 @@ class BaseRobot:
 
         self.respawn_timer = respawn_timer
         self.max_life = max_life
-
-        # self.movement_funct = movement_funct
-
-        # TODO maybe add v_max, v_alpha_max
 
 
 class ThreadRobot(BaseRobot):
