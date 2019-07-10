@@ -507,7 +507,6 @@ class Board(QWidget):
                 for tile_y in range(upmost_tile, downmost_tile):
                     tile_type = self.obstacleArray[tile_x][tile_y]
                     if tile_type:
-
                         # takes the position where it doesn't collide
                         # and the amount it backtracked
                         sub, current_pos_col = self.col_robots_walls_helper(
@@ -530,12 +529,10 @@ class Board(QWidget):
 
         # if any iteration produced any collisions : v = 0
         if collided:
-            if tile_type == 3:
-                # TODO: insert behavior for col with holes
-                #   (and delete this:)
-                final_pos_col = (final_pos_col[0], final_pos_col[1],
-                                 final_pos_col[2], 0, final_pos_col[4])
-            else:                
+            if final_tile_type == 3:
+                # TODO: change behavior for hitting a hole here
+                robot.deal_damage()
+            else:
                 final_pos_col = (final_pos_col[0], final_pos_col[1],
                                  final_pos_col[2], 0, final_pos_col[4])
         # if there was na collision at all, the original position is returned
