@@ -527,17 +527,14 @@ class Board(QWidget):
             else:
                 break
 
-        # if any iteration produced any collisions : v = 0
-        if collided:
-            if final_tile_type == 3:
-                # TODO: change behavior for hitting a hole here
-                robot.deal_damage()
-            else:
-                final_pos_col = (final_pos_col[0], final_pos_col[1],
-                                 final_pos_col[2], 0, final_pos_col[4])
         # if there was na collision at all, the original position is returned
-        else:
+        if not collided:
             final_pos_col = position_no_col
+
+        elif final_tile_type == 3:
+            # TODO: change behavior for hitting a hole here
+            robot.deal_damage()
+
         return final_pos_col
 
     def col_robots_walls_helper(self, new_position, robot, tile_x, tile_y):
