@@ -1,0 +1,8 @@
+Robot1 /
+a_max = 8
+a_alpha_max = 3
+behaviour = ChaseMovementGun()
+Robot2 /
+a_max = 8
+a_alpha_max = 3
+behaviour = RunMovement()

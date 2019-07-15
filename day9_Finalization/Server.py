@@ -64,6 +64,7 @@ class Board(QWidget):
         self.key_states = dict()
         self.stateless_keys = dict()
 
+        self.config()
         self.create_scenario()
 
         self.initiate_key_listening()
@@ -72,6 +73,44 @@ class Board(QWidget):
             robot.start()
 
         self.timer.start(Board.RefreshSpeed, self)
+
+    def config(self):
+        config_file = open("configs/config.txt", "r")
+        config_lines = config_file.readlines()
+        config_file.close()
+
+        config_file = open("configs/config.txt", "r")
+        argument_ary = []
+        for line in config_lines:
+            for letter in line:
+                if letter == "=":
+                    argument_ary.append(line)
+        config_file.close()
+
+        config_file = open("configs/config.txt", "r")
+        value_letter_ary = []
+        for argument in argument_ary:
+            index = 0
+            for letter in argument:
+                index = index + 1
+                if letter == "=":
+                    value_string = []
+                    while index < len(argument):
+                        value_string.append(argument[index])
+                        index = index + 1
+                    value_letter_ary.append(value_string)
+        config_file.close()
+
+        config_file = open("configs/config.txt", "r")
+        value_string_ary = []
+        for value in value_letter_ary:
+            value_string = ""
+            for letter in value:
+                if letter != '\n':
+                    value_string += letter
+            value_string_ary.append(value_string)
+
+        print(value_string_ary)
 
     def create_scenario(self):
         """Here, you can implement the scenario on the board.
@@ -1318,3 +1357,5 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     game = Game()
     sys.exit(app.exec_())
+
+
