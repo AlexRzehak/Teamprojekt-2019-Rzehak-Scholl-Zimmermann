@@ -1,20 +1,15 @@
 import sys
 import math
-import time
-import threading
 from functools import partial
-from timeit import default_timer
-from collections import defaultdict
+from dataclasses import dataclass
 
-from PyQt5.QtCore import Qt, QPoint, QBasicTimer, QRectF, QTimer
+from PyQt5.QtCore import Qt, QPoint, QBasicTimer, QRectF
 from PyQt5.QtGui import QPainter, QColor, QBrush, QPen, QPixmap
 from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow
 
 from Movement import FollowMovement, RandomTargetMovement, RunMovement, ChaseMovement, ChaseMovementGun, PermanentGunMovement, SimpleAvoidMovementGun, SimpleAvoidMovement, ChaseAvoidMovementGun
 from Robot import BaseRobot, ThreadRobot, SensorData, RoboGun, GunInterface
 import Utils
-
-cnt = 0
 
 FIELD_SIZE = 1000
 TILE_SIZE = 10
@@ -40,10 +35,7 @@ class Game(QMainWindow):
 
 class Board(QWidget):
     TileCount = int(FIELD_SIZE / TILE_SIZE)
-    # TODO delete
     RefreshSpeed = 33
-
-    SECONDS_PER_TICK = 0.05
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -57,13 +49,10 @@ class Board(QWidget):
         self.obstacle_list = Utils.generate_obstacle_list(
             self.obstacleArray, Board.TileCount)
 
-        # TODO delete
         self.timer = QBasicTimer()
 
         # TODO watch out that it doesn't get too big
         self.time_stamp = -1
-
-        self.init_textures()
 
         # A list of DataRobots
         self.robots = []
@@ -82,106 +71,7 @@ class Board(QWidget):
         for robot in self.robots:
             robot.start()
 
-        self.game_loop_barrier = threading.Barrier(2)
-        self.paint_thread = PaintThread(self.update)
-        self.init_game_loop()
-
-        self.senpai = default_timer()
-
-        # TODO delete
-        # self.timer.start(Board.RefreshSpeed, self)
-
-    def init_textures(self):
-        self.board_texture = QPixmap("textures/board.png")
-        self.wall_texture = QPixmap("textures/wall.png")
-        self.border_texture = QPixmap("textures/border.png")
-        self.hole_texture = QPixmap("textures/hole.png")
-        self.robot_texture = QPixmap("textures/robot.png")
-        self.bullet_texture = QPixmap("textures/bullet.png")
-
-    def init_game_loop(self):
-
-        def game_loop_scheduler():
-            # get local references
-            spt = Board.SECONDS_PER_TICK
-            pt = self.paint_thread
-
-            previous = default_timer()
-            lag = 0.0
-
-            while 1:
-                current = default_timer()
-                elapsed = current - previous
-                previous = current
-
-                lag += elapsed
-                while lag >= spt:
-                    # print(lag)
-                    # blocking
-                    self.trigger_game_loop()
-                    lag -= spt
-
-                # non-blocking
-                QTimer.singleShot(0.0, self.update)
-                # pt.call_paint()
-
-        t = threading.Thread(target=game_loop_scheduler)
-        t.daemon = True
-        t.start()
-
-    def trigger_game_loop(self):
-        QTimer.singleShot(0.0, self.game_loop)
-
-        # restore barrier
-        self.game_loop_barrier.reset()
-
-        self.game_loop_barrier.wait()
-
-    def game_loop(self):
-        """The game's main loop."""
-
-        # senpai2 = default_timer()
-        # print(senpai2 - self.senpai)
-        # self.senpai = senpai2
-
-        # control part
-
-        self.time_stamp += 1
-
-        self.handle_keys_with_state()
-
-        # physics part
-
-        self.calculate_shoot_action()
-
-        self.calculate_bullets()
-
-        for robot in self.robots:
-            poll = robot.poll_action_data()
-            self.calculate_robot(poll, robot)
-            # if collision:
-            #     m = self.create_bonk_message(collision)
-            #     robot.send_sensor_data(m)
-
-        # TODO we might improve that function
-        self.check_collision_robots()
-
-        # message part
-
-        if self.time_stamp % 10 == 0:
-            m = self.create_alert_message()
-            for robot in self.robots:
-                if robot.alert_flag:
-                    robot.send_sensor_data(m)
-
-        for robot in self.robots:
-            v = self.create_vision_message(robot)
-            robot.send_sensor_data(v)
-            m = self.create_position_message(robot)
-            robot.send_sensor_data(m)
-
-        # signal that calculations are done
-        self.game_loop_barrier.wait()
+        self.timer.start(Board.RefreshSpeed, self)
 
     def create_scenario(self):
         """Here, you can implement the scenario on the board.
@@ -201,8 +91,7 @@ class Board(QWidget):
         RoboGun.trigun_decorator(gun)
         robo2 = self.construct_robot(
             TILE_SIZE * 3, mv2, 12, 10, pos2, gun=gun, max_life=1)
-        robo2.setup_player_control(
-            control_scheme=ControlScheme.player_two_scheme)
+        robo2.setup_player_control(control_scheme=ControlScheme.player_two_scheme)
         # robo2.set_alert_flag()
         self.deploy_robot(robo2)
 
@@ -233,18 +122,23 @@ class Board(QWidget):
     # TODO we might improve that function
     def initiate_key_listening(self):
         self.setFocusPolicy(Qt.StrongFocus)
-        collected_keys_states = defaultdict(list)
-        collected_keys_stateless = defaultdict(list)
+        collected_keys_states = dict()
+        collected_keys_stateless = dict()
         for robot in self.robots:
-            if not robot.player_control:
-                continue
-            robot_keys = robot.player_control.control_scheme
-            for key, value in robot_keys.items():
-                # TODO distinguish stateless keys from keys with state
-                if not value == ControlScheme.AUTOPILOT_STRING:
-                    collected_keys_states[key].append(robot)
-                else:
-                    collected_keys_stateless[key].append(robot)
+            if robot.player_control:
+                robot_keys = robot.player_control.control_scheme
+                for key, value in robot_keys.items():
+                    # TODO distinguish stateless keys from keys with state
+                    if not value == ControlScheme.AUTOPILOT_STRING:
+                        if key in collected_keys_states:
+                            collected_keys_states[key].append(robot)
+                        else:
+                            collected_keys_states[key] = [robot]
+                    else:
+                        if key in collected_keys_stateless:
+                            collected_keys_stateless[key].append(robot)
+                        else:
+                            collected_keys_stateless[key] = [robot]
 
         for key, value in collected_keys_states.items():
             self.key_states[key] = dict(is_pressed=False,
@@ -282,11 +176,7 @@ class Board(QWidget):
     # ==================================
     # Painter Area
     # ==================================
-
     def paintEvent(self, e):
-        # global cnt
-        # cnt += 1
-        # print('hanzooo', cnt)
         qp = QPainter()
         qp.begin(self)
         self.drawBoard(qp)
@@ -297,9 +187,8 @@ class Board(QWidget):
         qp.end()
 
     def drawBoard(self, qp):
-        texture = self.board_texture
+        texture = QPixmap("textures/board.png")
         qp.save()
-        # TODO DO NOT HARD CODE
         source = QRectF(0, 0, 1125, 1125)
         target = QRectF(0, 0, 1000, 1000)
         qp.setOpacity(1)
@@ -314,7 +203,7 @@ class Board(QWidget):
                 tileVal = self.obstacleArray[xpos][ypos]
 
                 if tileVal == Hazard.Wall:
-                    texture = self.wall_texture
+                    texture = QPixmap("textures/wall.png")
                     qp.save()
                     source = QRectF(0, 0, 10, 10)
                     target = QRectF(xpos * TILE_SIZE, ypos *
@@ -323,7 +212,7 @@ class Board(QWidget):
                     qp.restore()
 
                 elif tileVal == Hazard.Border:
-                    texture = self.border_texture
+                    texture = QPixmap("textures/border.png")
                     qp.save()
                     source = QRectF(0, 0, 10, 10)
                     target = QRectF(xpos * TILE_SIZE, ypos *
@@ -332,7 +221,7 @@ class Board(QWidget):
                     qp.restore()
 
                 elif tileVal == Hazard.Hole:
-                    texture = self.hole_texture
+                    texture = QPixmap("textures/hole.png")
                     qp.save()
                     source = QRectF(0, 0, 10, 10)
                     target = QRectF(xpos * TILE_SIZE, ypos *
@@ -341,9 +230,8 @@ class Board(QWidget):
                     qp.restore()
 
     def drawRobot(self, qp, robot):
-        texture = self.robot_texture
-        overlay = QRectF(robot.x - robot.radius, robot.y -
-                         robot.radius, 2 * robot.radius, 2 * robot.radius)
+        texture = QPixmap("textures/robot.png")
+        overlay = QRectF(robot.x - robot.radius, robot.y - robot.radius, 2 * robot.radius, 2 * robot.radius)
         qp.save()
 
         if robot.life / robot.max_life == 0:
@@ -393,7 +281,7 @@ class Board(QWidget):
         qp.restore()
 
     def drawBullets(self, qp):
-        texture = self.bullet_texture
+        texture = QPixmap("textures/bullet.png")
         for bullet in self.bullets:
             bullet_radius = 10
             qp.save()
@@ -807,51 +695,44 @@ class Board(QWidget):
     # Main Loop
     # ==================================
 
-    # def timerEvent(self, event):
-    #     """The game's main loop.
-    #     Called every tick by active timer attribute of the board.
-    #     """
-    #     # TODO use delta-time to interpolate visuals
+    def timerEvent(self, event):
+        """The game's main loop.
+        Called every tick by active timer attribute of the board.
+        """
+        # TODO use delta-time to interpolate visuals
 
-    #     self.time_stamp += 1
+        self.time_stamp += 1
 
-    #     self.handle_keys_with_state()
+        self.handle_keys_with_state()
 
-    #     self.calculate_shoot_action()
+        self.calculate_shoot_action()
 
-    #     self.calculate_bullets()
+        self.calculate_bullets()
 
-    #     for robot in self.robots:
-    #         poll = robot.poll_action_data()
-    #         self.calculate_robot(poll, robot)
-    #         # if collision:
-    #         #     m = self.create_bonk_message(collision)
-    #         #     robot.send_sensor_data(m)
+        for robot in self.robots:
+            poll = robot.poll_action_data()
+            self.calculate_robot(poll, robot)
+            # if collision:
+            #     m = self.create_bonk_message(collision)
+            #     robot.send_sensor_data(m)
 
-    #     if self.time_stamp % 10 == 0:
-    #         m = self.create_alert_message()
-    #         for robot in self.robots:
-    #             if robot.alert_flag:
-    #                 robot.send_sensor_data(m)
+        if self.time_stamp % 10 == 0:
+            m = self.create_alert_message()
+            for robot in self.robots:
+                if robot.alert_flag:
+                    robot.send_sensor_data(m)
 
-    #     # TODO we might improve that function
-    #     self.check_collision_robots()
+        # TODO we might improve that function
+        self.check_collision_robots()
 
-    #     for robot in self.robots:
-    #         v = self.create_vision_message(robot)
-    #         robot.send_sensor_data(v)
-    #         m = self.create_position_message(robot)
-    #         robot.send_sensor_data(m)
+        for robot in self.robots:
+            v = self.create_vision_message(robot)
+            robot.send_sensor_data(v)
+            m = self.create_position_message(robot)
+            robot.send_sensor_data(m)
 
-    #     # update visuals
-    #     #
-    #     # self.update()
-    #     senpai = default_timer()
-    #     t = threading.Thread(target=self.repaint)
-    #     t.daemon = True
-    #     t.start()
-    #     # self.repaint()
-    #     print(default_timer()-senpai)
+        # update visuals
+        self.update()
 
     # ==================================
     # Message Area
@@ -1431,31 +1312,6 @@ class Bullet:
         self.position = position
         self.speed = speed
         self.direction = direction
-
-
-class PaintThread:
-    def __init__(self, draw_function):
-        # self._draw_function = draw_function
-        # self._waiting_for_call = True
-
-        # def paint_loop():
-        #     while 1:
-        #         while self._waiting_for_call:
-        #             time.sleep(0)
-        #         self._waiting_for_call = True
-        #         global cnt
-        #         cnt += 1
-        #         # print(cnt)
-        #         QTimer.singleShot(0.0, self._draw_function)
-        #         # self._draw_function()
-
-        # self._thread = threading.Thread(target=paint_loop)
-        # self._thread.daemon = True
-        # self._thread.start()
-        pass
-
-    def call_paint(self):
-        self._waiting_for_call = False
 
 
 if __name__ == '__main__':
