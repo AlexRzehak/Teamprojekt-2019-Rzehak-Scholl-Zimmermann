@@ -3,7 +3,7 @@ import math
 from functools import partial
 from dataclasses import dataclass
 
-from PyQt5.QtCore import Qt, QPoint, QBasicTimer, QRectF
+from PyQt5.QtCore import Qt, QPointF, QBasicTimer, QRectF
 from PyQt5.QtGui import QPainter, QColor, QBrush, QPen, QPixmap
 from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow
 
@@ -76,7 +76,6 @@ class Board(QWidget):
     def create_scenario(self):
         """Here, you can implement the scenario on the board.
         """
-
         # First add the robots.
         pos1 = (500, 750, 75, 0, 0)
         mv1 = RunMovement()
@@ -95,7 +94,7 @@ class Board(QWidget):
         # robo2.set_alert_flag()
         self.deploy_robot(robo2)
 
-        pos3 = (965, 35, 240, 0, 0)
+        pos3 = (300, 400, 70, 0, 0)
         mv3 = PermanentGunMovement()
         robo3 = self.construct_robot(TILE_SIZE * 2.5, mv3, 5, 15, pos3,
                                      v_max=12, v_alpha_max=30)
@@ -112,7 +111,7 @@ class Board(QWidget):
             TILE_SIZE * 2, mv4, 15, 15, pos4, gun=gun4)
         # robo4.set_alert_flag()
         self.deploy_robot(robo4)
-
+        
         # Then add scenario recipes.
         # self.create_catch_recipe(0, [3, 1, 2])
 
@@ -455,117 +454,93 @@ class Board(QWidget):
         new_v_alpha = Utils.limit(robot.v_alpha + a_alpha,
                                   -1 * robot.v_alpha_max, robot.v_alpha_max)
 
+        # calculate alpha and x and y component of v
+        alpha = robot.alpha + new_v_alpha
+        radian = ((alpha - 90) / 180 * math.pi)
+
+        dx = new_v * math.cos(radian)
+        dy = new_v * math.sin(radian)
+
         # calculates the new position - factors in collisions
-        new_position_col = self.col_robots_walls(
-            robot, new_v, new_v_alpha)
+        dx_col, dy_col, v_col = self.col_robots_walls(robot, dx, dy, new_v)
+        new_position_col = (robot.x + dx_col, robot.y + dy_col,
+                            alpha, v_col, new_v_alpha)
 
         # re-place the robot on the board
         Board.place_robot(robot, *new_position_col)
         # sends tuple to be used as "sensor_data"
         return new_position_col
 
-    def calculate_position(self, robot, new_v, new_v_alpha):
-        # calculates alpha
-        new_alpha = robot.alpha + new_v_alpha
-        # TODO confirm no bugs
-        new_alpha = new_alpha % 360
-        radian = ((new_alpha - 90) / 180 * math.pi)
-
-        # calculates x coordinate, only allows values inside walls
-        new_x = Utils.limit(robot.x + new_v * math.cos(radian), 0, FIELD_SIZE)
-
-        # calculates y coordinate, only allows values inside walls
-        new_y = Utils.limit(robot.y + new_v * math.sin(radian), 0, FIELD_SIZE)
-        new_position = (new_x, new_y, new_alpha, new_v, new_v_alpha)
-        return new_position
-
-    def col_robots_walls(self, robot, new_v, new_v_alpha):
+    def col_robots_walls(self, robot, max_dx, max_dy, v):
         """Task 2: Here the collision with obstacles is calculated."""
+        if True:
+            # calculate the boundaries of the area where tiles will be tested
+            robot_reach = robot.radius + abs(v)
+            leftmost_tile = Utils.limit(
+                int((robot.x - robot_reach) / TILE_SIZE), 0, Board.TileCount)
+            rightmost_tile = Utils.limit(
+                int((robot.x + robot_reach) / TILE_SIZE) + 1, 0, Board.TileCount)
+            upmost_tile = Utils.limit(
+                int((robot.y - robot_reach) / TILE_SIZE), 0, Board.TileCount)
+            downmost_tile = Utils.limit(
+                int((robot.y + robot_reach) / TILE_SIZE) + 1, 0, Board.TileCount)
 
-        # calculates the new position without factoring in any collisions
-        position_no_col = self.calculate_position(robot, new_v, new_v_alpha)
-        current_testing_pos = position_no_col
+        min_dx = max_dx
+        min_dy = max_dy
+        final_tile_type = 0
+        # tests all tiles in the robots reach for collision
+        for tile_x in range(leftmost_tile, rightmost_tile):
+            for tile_y in range(upmost_tile, downmost_tile):
+                tile_type = self.obstacleArray[tile_x][tile_y]
+                if tile_type:
+                    dx, dy = self.col_robots_walls_helper(
+                        max_dx, max_dy, robot, tile_x, tile_y)
 
-        # loop until the current position doesn't produce any collision
-        collided = False
+                    if abs(dx) < abs(min_dx):
+                        min_dx = dx
+                        final_tile_type = tile_type
+                    if abs(dy) < abs(min_dy):
+                        min_dy = dy
+                        final_tile_type = tile_type
 
-        # calculate the boundaries of the area where tiles will be tested
-        robot_reach = robot.radius + abs(new_v)
-        leftmost_tile = Utils.limit(
-            int((robot.x - robot_reach) / TILE_SIZE), 0, Board.TileCount)
-        rightmost_tile = Utils.limit(
-            int((robot.x + robot_reach) / TILE_SIZE) + 1, 0, Board.TileCount)
-        upmost_tile = Utils.limit(
-            int((robot.y - robot_reach) / TILE_SIZE), 0, Board.TileCount)
-        downmost_tile = Utils.limit(
-            int((robot.y + robot_reach) / TILE_SIZE) + 1, 0, Board.TileCount)
+        if final_tile_type == 3:
+            robot.deal_damage(1000)
 
-        while True:
-            max_sub = 0
+        return min_dx, min_dy, v
 
-            # tests all 100x100 tiles in the array for collision
-            for tile_x in range(leftmost_tile, rightmost_tile):
-                for tile_y in range(upmost_tile, downmost_tile):
-                    tile_type = self.obstacleArray[tile_x][tile_y]
-                    if tile_type:
-                        # takes the position where it doesn't collide
-                        # and the amount it backtracked
-                        sub, current_pos_col = self.col_robots_walls_helper(
-                            current_testing_pos, robot, tile_x, tile_y)
+    @staticmethod
+    def col_robots_walls_helper(max_dx, max_dy, robot, tile_x, tile_y):
+        tile_origin = QPointF(tile_x * TILE_SIZE, tile_y * TILE_SIZE)
+        dx_step = max_dx/10
+        dy_step = max_dy/10
 
-                        # saves position with the most backtracking
-                        if abs(sub) > abs(max_sub):
-                            max_sub = sub
-                            final_pos_col = current_pos_col
-                            final_tile_type = tile_type
+        dx = dy = 0
+        x_collided = False
+        y_collided = False
+        for _ in range(10):
 
-            # if this iteration (one position) produced any collisions
-            # the final position gets tested again
-            if max_sub:
-                current_testing_pos = final_pos_col
-                # test if this adjusted position needs more adjusting
-                collided = True
-            else:
+            if not x_collided:
+                dx += dx_step
+                robot_center = QPointF(dx + robot.x, dy + robot.y - 5 * dy_step)
+                x_collided = Utils.check_collision_circle_rect(
+                    robot_center, robot.radius, tile_origin, TILE_SIZE, TILE_SIZE)
+
+            if not y_collided:
+                dy += dy_step
+                robot_center = QPointF(dx + robot.x - 5 * dx_step, dy + robot.y)
+                y_collided = Utils.check_collision_circle_rect(
+                    robot_center, robot.radius, tile_origin, TILE_SIZE, TILE_SIZE)
+
+            if x_collided and y_collided:
                 break
 
-        # if there was na collision at all, the original position is returned
-        if not collided:
-            final_pos_col = position_no_col
+        if x_collided:
+            dx += -dx_step
+        if y_collided:
+            dy += -dy_step
 
-        elif final_tile_type == 3:
-            # TODO: change behavior for hitting a hole here
-            robot.deal_damage()
 
-        return final_pos_col
-
-    def col_robots_walls_helper(self, new_position, robot, tile_x, tile_y):
-        max_v = new_position[3]
-        # checks if the robot collides with a specific tile
-
-        # calc the coordinates of the given tile
-        tile_origin = QPoint(tile_x * TILE_SIZE, tile_y * TILE_SIZE)
-
-        # loop terminates when there is no collision
-        sub_from_v = 0
-        while True:
-            # recalculate the position with the adjusted v
-            new_position_col = self.calculate_position(
-                robot, max_v - sub_from_v, new_position[4])
-            robot_center = QPoint(new_position_col[0], new_position_col[1])
-
-            colliding = Utils.check_collision_circle_rect(
-                robot_center, robot.radius, tile_origin, TILE_SIZE, TILE_SIZE)
-            if abs(sub_from_v) <= abs(max_v) and colliding:
-                if max_v > 0:
-                    sub_from_v += 1
-                else:
-                    sub_from_v -= 1
-            else:
-                break
-
-        # return the amount of backtracking (0 if no collision)
-        # and the closest position that is collision free
-        return sub_from_v, new_position_col
+        return dx, dy
 
     # TODO we might improve that function
     def check_collision_robots(self):
@@ -1213,7 +1188,7 @@ class PlayerControl:
         action_name = self.control_scheme[key]
         action = getattr(self, action_name)
         # stateless
-        # TODO distinguish between stateles keys and keys with state
+        # TODO distinguish between stateless keys and keys with state
         if state is None:
             action()
         else:
