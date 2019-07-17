@@ -83,7 +83,7 @@ class SpinMovement(Movement):
 
 
 class FollowMovement(Movement):
-    # TODO fix self follow Error
+
     def __init__(self, target):
         self.target = target
 
@@ -142,7 +142,7 @@ class FollowMovement(Movement):
 
 
 class RandomTargetMovement(Movement):
-    # TODO fix self follow Error
+
     def alert(self, data, robot):
         # setting robot destination to the coordinates of target robot
         robot.destination = (random.randint(10, 990), random.randint(10, 990))
@@ -155,7 +155,6 @@ class RandomTargetMovement(Movement):
         if not robot.destination:
             destination_x = x
             destination_y = y
-            # TODO fix stuff
             return robot.a, robot.a_alpha
         else:
             destination_x = robot.destination[0]
@@ -213,12 +212,8 @@ class SimpleAvoidMovement(Movement):
         obj_coordinates = (
             obj_position[0] * tile_size + 5, obj_position[1] * tile_size + 5)
 
-        if robot.destination[1] == 1 or robot.destination[1] == 2 or robot.destination[1] == 3:
-            obj_type = "wall"
-            obj_distance = robot.destination[2]
-        else:
-            obj_type = "robot"
-            obj_distance = robot.destination[1]
+        # determine object type and distance
+        obj_type, obj_distance = set_object_info(robot)
 
         # calculate object angle
         obj_angle = calculate_angle_between_vectors(
@@ -248,7 +243,6 @@ class SimpleAvoidMovement(Movement):
 class RunMovement(Movement):
 
     def alert(self, data, robot):
-        robot.robomap = data
         robot.threat = prime_robot(data)
         return robot.a, robot.a_alpha
 
@@ -269,12 +263,8 @@ class RunMovement(Movement):
             obj_position[0] * tile_size + 5, obj_position[1] * tile_size + 5)
         obj_angle = calculate_angle_between_vectors(
             obj_coordinates, x, y, v, alpha)
-        if robot.destination[1] == 1 or robot.destination[1] == 2 or robot.destination[1] == 3:
-            obj_type = "wall"
-            obj_distance = robot.destination[2]
-        else:
-            obj_type = "robot"
-            obj_distance = robot.destination[1]
+        # determine object type and distance
+        obj_type, obj_distance = set_object_info(robot)
 
         # calculate robot data
         threat = robot.threat
@@ -372,16 +362,12 @@ class SimpleAvoidMovementGun(Movement):
             v = 0.001
         v_max = 10
         tile_size = 10
+
         obj_position = robot.destination[0]
         obj_coordinates = (
             obj_position[0] * tile_size + 5, obj_position[1] * tile_size + 5)
-
-        if robot.destination[1] == 1 or robot.destination[1] == 2 or robot.destination[1] == 3:
-            obj_type = "wall"
-            obj_distance = robot.destination[2]
-        else:
-            obj_type = "robot"
-            obj_distance = robot.destination[1]
+        # determine object type and distance
+        obj_type, obj_distance = set_object_info(robot)
 
         # calculate object angle
         obj_angle = calculate_angle_between_vectors(
@@ -578,6 +564,15 @@ def calculate_destination_alpha(vec1, vec2, vec1_magnitude, vec2_magnitude):
     destination_alpha_degree = (destination_alpha * 180 / math.pi) % 360
     return destination_alpha_degree
 
+
+def set_object_info(robot):
+    if robot.destination[1] == 1 or robot.destination[1] == 2 or robot.destination[1] == 3:
+        obj_type = "wall"
+        obj_distance = robot.destination[2]
+    else:
+        obj_type = "robot"
+        obj_distance = robot.destination[1]
+    return obj_type, obj_distance
 
 def set_delta_alpha(obj_type, distance, threshold, obj_angle, turn_direction, v_alpha):
     # set delta_alpha based on obstacle type and distance
