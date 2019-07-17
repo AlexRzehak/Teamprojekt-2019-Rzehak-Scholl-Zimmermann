@@ -4,6 +4,7 @@ import time
 import threading
 from functools import partial
 from timeit import default_timer
+from collections import defaultdict
 
 from PyQt5.QtCore import Qt, QPoint, QBasicTimer, QRectF, QTimer
 from PyQt5.QtGui import QPainter, QColor, QBrush, QPen, QPixmap
@@ -13,6 +14,7 @@ from Movement import FollowMovement, RandomTargetMovement, RunMovement, ChaseMov
 from Robot import BaseRobot, ThreadRobot, SensorData, RoboGun, GunInterface
 import Utils
 
+cnt = 0
 
 FIELD_SIZE = 1000
 TILE_SIZE = 10
@@ -41,7 +43,7 @@ class Board(QWidget):
     # TODO delete
     RefreshSpeed = 33
 
-    SECONDS_PER_TICK = 0.033
+    SECONDS_PER_TICK = 0.05
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -84,6 +86,8 @@ class Board(QWidget):
         self.paint_thread = PaintThread(self.update)
         self.init_game_loop()
 
+        self.senpai = default_timer()
+
         # TODO delete
         # self.timer.start(Board.RefreshSpeed, self)
 
@@ -111,14 +115,15 @@ class Board(QWidget):
                 previous = current
 
                 lag += elapsed
-
                 while lag >= spt:
+                    # print(lag)
                     # blocking
                     self.trigger_game_loop()
                     lag -= spt
 
                 # non-blocking
-                pt.call_paint()
+                QTimer.singleShot(0.0, self.update)
+                # pt.call_paint()
 
         t = threading.Thread(target=game_loop_scheduler)
         t.daemon = True
@@ -134,6 +139,10 @@ class Board(QWidget):
 
     def game_loop(self):
         """The game's main loop."""
+
+        # senpai2 = default_timer()
+        # print(senpai2 - self.senpai)
+        # self.senpai = senpai2
 
         # control part
 
@@ -224,23 +233,18 @@ class Board(QWidget):
     # TODO we might improve that function
     def initiate_key_listening(self):
         self.setFocusPolicy(Qt.StrongFocus)
-        collected_keys_states = dict()
-        collected_keys_stateless = dict()
+        collected_keys_states = defaultdict(list)
+        collected_keys_stateless = defaultdict(list)
         for robot in self.robots:
-            if robot.player_control:
-                robot_keys = robot.player_control.control_scheme
-                for key, value in robot_keys.items():
-                    # TODO distinguish stateless keys from keys with state
-                    if not value == ControlScheme.AUTOPILOT_STRING:
-                        if key in collected_keys_states:
-                            collected_keys_states[key].append(robot)
-                        else:
-                            collected_keys_states[key] = [robot]
-                    else:
-                        if key in collected_keys_stateless:
-                            collected_keys_stateless[key].append(robot)
-                        else:
-                            collected_keys_stateless[key] = [robot]
+            if not robot.player_control:
+                continue
+            robot_keys = robot.player_control.control_scheme
+            for key, value in robot_keys.items():
+                # TODO distinguish stateless keys from keys with state
+                if not value == ControlScheme.AUTOPILOT_STRING:
+                    collected_keys_states[key].append(robot)
+                else:
+                    collected_keys_stateless[key].append(robot)
 
         for key, value in collected_keys_states.items():
             self.key_states[key] = dict(is_pressed=False,
@@ -280,6 +284,9 @@ class Board(QWidget):
     # ==================================
 
     def paintEvent(self, e):
+        # global cnt
+        # cnt += 1
+        # print('hanzooo', cnt)
         qp = QPainter()
         qp.begin(self)
         self.drawBoard(qp)
@@ -1428,19 +1435,24 @@ class Bullet:
 
 class PaintThread:
     def __init__(self, draw_function):
-        self._draw_function = draw_function
-        self._waiting_for_call = True
+        # self._draw_function = draw_function
+        # self._waiting_for_call = True
 
-        def paint_loop():
-            while 1:
-                while self._waiting_for_call:
-                    time.sleep(0)
-                self._waiting_for_call = True
-                self._draw_function()
+        # def paint_loop():
+        #     while 1:
+        #         while self._waiting_for_call:
+        #             time.sleep(0)
+        #         self._waiting_for_call = True
+        #         global cnt
+        #         cnt += 1
+        #         # print(cnt)
+        #         QTimer.singleShot(0.0, self._draw_function)
+        #         # self._draw_function()
 
-        self._thread = threading.Thread(target=paint_loop)
-        self._thread.daemon = True
-        self._thread.start()
+        # self._thread = threading.Thread(target=paint_loop)
+        # self._thread.daemon = True
+        # self._thread.start()
+        pass
 
     def call_paint(self):
         self._waiting_for_call = False
