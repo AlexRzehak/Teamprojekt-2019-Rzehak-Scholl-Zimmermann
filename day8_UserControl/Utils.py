@@ -3,7 +3,7 @@ import math
 import time
 import threading
 
-from PyQt5.QtCore import QPoint
+from PyQt5.QtCore import QPointF
 
 
 def generate_obstacle_list(matrix, size):
@@ -152,10 +152,10 @@ def check_collision_circle_rect(circle_center, circle_radius,
                                 rect_origin, rect_width, rect_height):
 
     # calc the closest point in the rectangle to the robot
-    closest_point = QPoint(limit(circle_center.x(), rect_origin.x(), rect_origin.x() + rect_width - 1),
+    closest_point = QPointF(limit(circle_center.x(), rect_origin.x(), rect_origin.x() + rect_width - 1),
                            limit(circle_center.y(), rect_origin.y(), rect_origin.y() + rect_height - 1))
 
-    # calc the x and y distance from the closest point to the center of the robot
+    # calc the x and y distance from the closest point to the center of the robo
     dx = abs(closest_point.x() - circle_center.x())
     dy = abs(closest_point.y() - circle_center.y())
 
@@ -214,7 +214,4 @@ def create_example_array(size: int):
         array[i][int(size/2)] = 1
         array[int(size/3)][i] = 1
         array[int(size / 4 * 3)][i] = 1
-
-
-
     return array
