@@ -41,6 +41,7 @@ class Board(QWidget):
         super().__init__(parent)
 
         self.obstacleArray = Utils.create_example_array(Board.TileCount)
+        self.rectangles = self.group_tiles_into_rectangles(self.obstacleArray)
 
         # Create an additional obstacle list from array
         # storing the position values of every obstacle.
@@ -435,6 +436,44 @@ class Board(QWidget):
     # Collision Area
     # ==================================
 
+    # TODO  1. put this in the proper part of this class
+    #       2. fix this and make it pretty
+    def group_tiles_into_rectangles(self, tiles_array):
+        rects = []
+        in_row = [[False] * 100 for _ in range(100)]
+        in_col = [[False] * 100 for _ in range(100)]
+        for tile_x in range(100):
+            for tile_y in range(100):
+                tile_type = self.obstacleArray[tile_x][tile_y]
+                last_x = tile_x
+                last_y = tile_y
+                if tile_type and not in_row[tile_x][tile_y]:
+                    for x in range(100):
+                        neighbour_x = Utils.limit(tile_x + x, 0, 99)
+                        if tile_type == self.obstacleArray[neighbour_x][tile_y]:
+                            last_x = neighbour_x
+                            in_row[neighbour_x][tile_y] = True
+                        else:
+                            break
+                if tile_type and not in_col[tile_x][tile_y]:
+                    for y in range(100):
+                        neighbour_y = Utils.limit(tile_y + y, 0, 99)
+                        if tile_type == self.obstacleArray[tile_x][neighbour_y]:
+                            last_y = neighbour_y
+                            in_col[tile_x][neighbour_y] = True
+                        else:
+                            break
+                if tile_type:
+                    rect_x = tile_x * TILE_SIZE
+                    rect_y = tile_y * TILE_SIZE
+                    row_len = (last_x - tile_x) * TILE_SIZE + TILE_SIZE
+                    col_len = (last_y - tile_y) * TILE_SIZE + TILE_SIZE
+                    if not tile_x == last_x:
+                        rects.append((rect_x, rect_y, row_len, 10, tile_type))
+                    if not tile_y == last_y:
+                        rects.append((rect_x, rect_y, 10, col_len, tile_type))
+        return rects
+
     def calculate_robot(self, poll, robot):
         """Uses current position data of robot robot and acceleration values
         polled from the robot to calculate new position values.
@@ -473,35 +512,22 @@ class Board(QWidget):
 
     def col_robots_walls(self, robot, max_dx, max_dy, v):
         """Task 2: Here the collision with obstacles is calculated."""
-        if True:
-            # calculate the boundaries of the area where tiles will be tested
-            robot_reach = robot.radius + abs(v)
-            leftmost_tile = Utils.limit(
-                int((robot.x - robot_reach) / TILE_SIZE), 0, Board.TileCount)
-            rightmost_tile = Utils.limit(
-                int((robot.x + robot_reach) / TILE_SIZE) + 1, 0, Board.TileCount)
-            upmost_tile = Utils.limit(
-                int((robot.y - robot_reach) / TILE_SIZE), 0, Board.TileCount)
-            downmost_tile = Utils.limit(
-                int((robot.y + robot_reach) / TILE_SIZE) + 1, 0, Board.TileCount)
 
         min_dx = max_dx
         min_dy = max_dy
         final_tile_type = 0
         # tests all tiles in the robots reach for collision
-        for tile_x in range(leftmost_tile, rightmost_tile):
-            for tile_y in range(upmost_tile, downmost_tile):
-                tile_type = self.obstacleArray[tile_x][tile_y]
-                if tile_type:
-                    dx, dy = self.col_robots_walls_helper(
-                        max_dx, max_dy, robot, tile_x, tile_y)
+        for obstacle in self.rectangles:
+            tile_type = obstacle[4]
+            dx, dy = self.col_robots_walls_helper(max_dx, max_dy,
+                                                  robot, obstacle)
 
-                    if abs(dx) < abs(min_dx):
-                        min_dx = dx
-                        final_tile_type = tile_type
-                    if abs(dy) < abs(min_dy):
-                        min_dy = dy
-                        final_tile_type = tile_type
+            if abs(dx) < abs(min_dx):
+                min_dx = dx
+                final_tile_type = tile_type
+            if abs(dy) < abs(min_dy):
+                min_dy = dy
+                final_tile_type = tile_type
 
         if final_tile_type == 3:
             robot.deal_damage(1000)
@@ -509,8 +535,8 @@ class Board(QWidget):
         return min_dx, min_dy, v
 
     @staticmethod
-    def col_robots_walls_helper(max_dx, max_dy, robot, tile_x, tile_y):
-        tile_origin = QPointF(tile_x * TILE_SIZE, tile_y * TILE_SIZE)
+    def col_robots_walls_helper(max_dx, max_dy, robot, rect):
+        tile_origin = QPointF(rect[0], rect[1])
         dx_step = max_dx/10
         dy_step = max_dy/10
 
@@ -521,15 +547,15 @@ class Board(QWidget):
 
             if not x_collided:
                 dx += dx_step
-                robot_center = QPointF(dx + robot.x, dy + robot.y - 5 * dy_step)
+                robot_center = QPointF(dx + robot.x, dy + robot.y - 1 * dy_step)
                 x_collided = Utils.check_collision_circle_rect(
-                    robot_center, robot.radius, tile_origin, TILE_SIZE, TILE_SIZE)
+                    robot_center, robot.radius, tile_origin, rect[2], rect[3])
 
             if not y_collided:
                 dy += dy_step
-                robot_center = QPointF(dx + robot.x - 5 * dx_step, dy + robot.y)
+                robot_center = QPointF(dx + robot.x - 1 * dx_step, dy + robot.y)
                 y_collided = Utils.check_collision_circle_rect(
-                    robot_center, robot.radius, tile_origin, TILE_SIZE, TILE_SIZE)
+                    robot_center, robot.radius, tile_origin, rect[2], rect[3])
 
             if x_collided and y_collided:
                 break
@@ -538,7 +564,6 @@ class Board(QWidget):
             dx += -dx_step
         if y_collided:
             dy += -dy_step
-
 
         return dx, dy
 
