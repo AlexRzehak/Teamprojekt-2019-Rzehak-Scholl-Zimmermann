@@ -501,7 +501,8 @@ class Board(QWidget):
         dy = new_v * math.sin(radian)
 
         # calculates the new position - factors in collisions
-        dx_col, dy_col, v_col = self.col_robots_walls(robot, dx, dy, new_v)
+        col_data = self.col_robots_walls(robot, dx, dy, new_v, new_v_alpha)
+        dx_col, dy_col, v_col, v_alpha_col = col_data
         new_position_col = (robot.x + dx_col, robot.y + dy_col,
                             alpha, v_col, new_v_alpha)
 
@@ -510,7 +511,7 @@ class Board(QWidget):
         # sends tuple to be used as "sensor_data"
         return new_position_col
 
-    def col_robots_walls(self, robot, max_dx, max_dy, v):
+    def col_robots_walls(self, robot, max_dx, max_dy, v, v_alpha):
         """Task 2: Here the collision with obstacles is calculated."""
 
         min_dx = max_dx
@@ -531,8 +532,10 @@ class Board(QWidget):
 
         if final_tile_type == 3:
             robot.deal_damage(1000)
+            v = 0
+            v_alpha = 0
 
-        return min_dx, min_dy, v
+        return min_dx, min_dy, v, v_alpha
 
     @staticmethod
     def col_robots_walls_helper(max_dx, max_dy, robot, rect):
