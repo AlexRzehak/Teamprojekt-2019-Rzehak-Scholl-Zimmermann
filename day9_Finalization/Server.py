@@ -11,11 +11,43 @@ from PyQt5.QtGui import QPainter, QColor, QBrush, QPen, QPixmap
 from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow
 
 from Movement import FollowMovement, RandomTargetMovement, RunMovement, ChaseMovement, ChaseMovementGun, PermanentGunMovement, SimpleAvoidMovementGun, SimpleAvoidMovement, ChaseAvoidMovementGun
-from Robot import BaseRobot, ThreadRobot, SensorData, RoboGun, GunInterface
-import Utils
+from model import BaseRobot, DataRobot
+from ai_control import RobotControl, SensorData
+from player_control import PlayerControl, ControlScheme
+from robogun import RoboGun, GunInterface
+import scenario
+import utils
 
-FIELD_SIZE = 1000
-TILE_SIZE = 10
+# ==================================
+# Server
+# ==================================
+#
+# In this file, you will find the main game:
+# The Game class will define properties of the window.
+# The board class controls the execution of the game.
+# After the board state is initiated with help of the configparser,
+# start the main loop of the game, performing actions with a certain tick rate.
+# These actions include:
+# - Forwarding / execution of key inputs.
+# - Calculation and selection of data to send to robot units.
+# - Sending and enquiring data to and from robot units.
+# - Physics engine calculations.
+# Also, paint the game with help of Qt.
+#
+# CHANGE HERE:
+# - the main loop
+# - window and paint functions
+# - physics of movement
+# - collision mechanics
+# - bullet movement and collision
+# - Qt key events and key state lists
+# - creation of message data & vision
+# - control over the board's obstacles
+
+
+GAME_TITLE = 'SpaceBaseRobots'
+FIELD_SIZE = scenario.FIELD_SIZE
+TILE_SIZE = scenario.TILE_SIZE
 
 
 class Game(QMainWindow):
@@ -32,7 +64,7 @@ class Game(QMainWindow):
         # setting up Window
         y_offset = (1080 - FIELD_SIZE) / 2
         self.setGeometry(300, y_offset, FIELD_SIZE, FIELD_SIZE)
-        self.setWindowTitle('RobotGame')
+        self.setWindowTitle(GAME_TITLE)
         self.show()
 
 
@@ -43,36 +75,41 @@ class Board(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
 
-        self.obstacleArray = Utils.create_example_array(Board.TILE_COUNT)
+        self.obstacleArray = utils.create_example_array(Board.TILE_COUNT)
 
         # Create an additional obstacle list from array
         # storing the position values of every obstacle.
         # Since we don't change the obstacleArray,
         # this call is only needed once.
-        self.obstacle_list = Utils.generate_obstacle_list(
+        self.obstacle_list = utils.generate_obstacle_list(
             self.obstacleArray, Board.TILE_COUNT)
 
-        # TODO watch out that it doesn't get too big
         self.time_stamp = -1
 
         self.init_textures()
 
-        # A list of DataRobots
+        # Store data representations of all involved robot units.
         self.robots = []
 
+        # Data representations of bullets.
         self.bullets = set()
 
         self.collision_scenarios = dict()
 
+        # Initiate board state and game parameters.
         self.create_scenario()
 
+        # Inititate key listener.
         self.key_states = dict()
         self.stateless_keys = dict()
         self.initiate_key_listening()
+        self.setFocusPolicy(Qt.StrongFocus)
 
+        # Start the calculation process of the AI.
         for robot in self.robots:
             robot.start()
 
+        # Start the game loop.
         self.game_loop_barrier = threading.Barrier(2)
         self.init_game_loop()
 
@@ -141,9 +178,6 @@ class Board(QWidget):
         for robot in self.robots:
             poll = robot.poll_action_data()
             self.calculate_robot(poll, robot)
-            # if collision:
-            #     m = self.create_bonk_message(collision)
-            #     robot.send_sensor_data(m)
 
         self.check_collision_robots()
 
@@ -193,7 +227,7 @@ class Board(QWidget):
                                      v_max=12, v_alpha_max=30)
         robo3.set_alert_flag()
         pc = PlayerControl(robo3, ControlScheme.default_scheme,
-                           invasive_controls=True, alpha_accel_amt=10)
+                           invasive_controls=True)
         robo3.setup_player_control(pc)
         self.deploy_robot(robo3)
 
@@ -211,21 +245,20 @@ class Board(QWidget):
     def deploy_robot(self, data_robot):
         self.robots.append(data_robot)
 
-    # TODO we might improve that function
     def initiate_key_listening(self):
-        self.setFocusPolicy(Qt.StrongFocus)
         collected_keys_states = defaultdict(list)
         collected_keys_stateless = defaultdict(list)
+
         for robot in self.robots:
             if not robot.player_control:
                 continue
+
             robot_keys = robot.player_control.control_scheme
             for key, value in robot_keys.items():
-                # TODO distinguish stateless keys from keys with state
-                if not value == ControlScheme.AUTOPILOT_STRING:
-                    collected_keys_states[key].append(robot)
-                else:
+                if value in ControlScheme.STATELESS_KEYS:
                     collected_keys_stateless[key].append(robot)
+                if value in ControlScheme.KEYS_WITH_STATE:
+                    collected_keys_states[key].append(robot)
 
         for key, value in collected_keys_states.items():
             self.key_states[key] = dict(is_pressed=False,
@@ -249,7 +282,7 @@ class Board(QWidget):
                                max_life=max_life, respawn_timer=respawn_timer)
 
         # Create autonomous robot unit.
-        thread_robot = ThreadRobot(base_robot, movement_funct)
+        thread_robot = RobotControl(base_robot, movement_funct)
 
         # Create data representation to be added to tracking of the server.
         data_robot = DataRobot(base_robot, thread_robot)
@@ -402,7 +435,6 @@ class Board(QWidget):
         for h in hunters:
             f = partial(callee, h)
             self.collision_scenarios[(fugitive, h)] = f
-            # self.collision_scenarios[(h, fugitive)] = f
 
     def perform_collision_scenario(self, col_tuple):
         """Collision scenario handler.
@@ -427,7 +459,7 @@ class Board(QWidget):
         point = (robot.x, robot.y)
 
         # use calculate_angles for the maths
-        diffs, dists = Utils.calculate_angles(points, point,
+        diffs, dists = utils.calculate_angles(points, point,
                                               robot.alpha, robot.fov_angle)
 
         out = []
@@ -475,7 +507,7 @@ class Board(QWidget):
             # for each robot, get its distance to (x) and calculate,
             # wheather they overlap.
             pos = (rb.x, rb.y)
-            check, d = Utils.overlap_check(pos, point, rb.radius, robot.radius)
+            check, d = utils.overlap_check(pos, point, rb.radius, robot.radius)
             # create a list of position and distance for EVERY robot.
             point_list.append((pos, d))
 
@@ -490,7 +522,7 @@ class Board(QWidget):
         # angle-check
         angles = []
         if calc_list:
-            angles, _ = Utils.calculate_angles(calc_list, point,
+            angles, _ = utils.calculate_angles(calc_list, point,
                                                robot.alpha, robot.fov_angle)
 
         for index, dif in zip(calc_indices, angles):
@@ -500,8 +532,8 @@ class Board(QWidget):
 
         # ray-check
         # calculate the two border rays of the fov
-        ray1 = Utils.vector_from_angle(robot.alpha - robot.fov_angle/2)
-        ray2 = Utils.vector_from_angle(robot.alpha + robot.fov_angle/2)
+        ray1 = utils.vector_from_angle(robot.alpha - robot.fov_angle/2)
+        ray2 = utils.vector_from_angle(robot.alpha + robot.fov_angle/2)
 
         for index, val in enumerate(result):
             # only check robots that are not already seen
@@ -509,8 +541,8 @@ class Board(QWidget):
                 rb = self.robots[index]
                 circle = (rb.x, rb.y, rb.radius)
                 # again, python helps us out!
-                if (Utils.ray_check(point, ray1, circle) or
-                        Utils.ray_check(point, ray2, circle)):
+                if (utils.ray_check(point, ray1, circle) or
+                        utils.ray_check(point, ray2, circle)):
                     result[index] = point_list[index]
 
         # now the list is complete
@@ -529,14 +561,14 @@ class Board(QWidget):
         a, a_alpha = poll
 
         # checks if acceleration is valid
-        a = Utils.limit(a, -robot.a_max, robot.a_max)
+        a = utils.limit(a, -robot.a_max, robot.a_max)
 
         # checks if angle acceleration is valid
-        a_alpha = Utils.limit(a_alpha, -robot.a_alpha_max, robot.a_alpha_max)
+        a_alpha = utils.limit(a_alpha, -robot.a_alpha_max, robot.a_alpha_max)
 
         # calculates velocities
-        new_v = Utils.limit(robot.v + a, -1 * robot.v_max, robot.v_max)
-        new_v_alpha = Utils.limit(robot.v_alpha + a_alpha,
+        new_v = utils.limit(robot.v + a, -1 * robot.v_max, robot.v_max)
+        new_v_alpha = utils.limit(robot.v_alpha + a_alpha,
                                   -1 * robot.v_alpha_max, robot.v_alpha_max)
 
         # calculates the new position - factors in collisions
@@ -555,10 +587,10 @@ class Board(QWidget):
         radian = ((new_alpha - 90) / 180 * math.pi)
 
         # calculates x coordinate, only allows values inside walls
-        new_x = Utils.limit(robot.x + new_v * math.cos(radian), 0, FIELD_SIZE)
+        new_x = utils.limit(robot.x + new_v * math.cos(radian), 0, FIELD_SIZE)
 
         # calculates y coordinate, only allows values inside walls
-        new_y = Utils.limit(robot.y + new_v * math.sin(radian), 0, FIELD_SIZE)
+        new_y = utils.limit(robot.y + new_v * math.sin(radian), 0, FIELD_SIZE)
         new_position = (new_x, new_y, new_alpha, new_v, new_v_alpha)
         return new_position
 
@@ -574,13 +606,13 @@ class Board(QWidget):
 
         # calculate the boundaries of the area where tiles will be tested
         robot_reach = robot.radius + abs(new_v)
-        leftmost_tile = Utils.limit(
+        leftmost_tile = utils.limit(
             int((robot.x - robot_reach) / TILE_SIZE), 0, Board.TILE_COUNT)
-        rightmost_tile = Utils.limit(
+        rightmost_tile = utils.limit(
             int((robot.x + robot_reach) / TILE_SIZE) + 1, 0, Board.TILE_COUNT)
-        upmost_tile = Utils.limit(
+        upmost_tile = utils.limit(
             int((robot.y - robot_reach) / TILE_SIZE), 0, Board.TILE_COUNT)
-        downmost_tile = Utils.limit(
+        downmost_tile = utils.limit(
             int((robot.y + robot_reach) / TILE_SIZE) + 1, 0, Board.TILE_COUNT)
 
         while True:
@@ -636,7 +668,7 @@ class Board(QWidget):
                 robot, max_v - sub_from_v, new_position[4])
             robot_center = QPoint(new_position_col[0], new_position_col[1])
 
-            colliding = Utils.check_collision_circle_rect(
+            colliding = utils.check_collision_circle_rect(
                 robot_center, robot.radius, tile_origin, TILE_SIZE, TILE_SIZE)
             if abs(sub_from_v) <= abs(max_v) and colliding:
                 if max_v > 0:
@@ -662,7 +694,7 @@ class Board(QWidget):
                     r1 = bot1.radius
                     c2 = (bot2.x, bot2.y)
                     r2 = bot2.radius
-                    check, _ = Utils.overlap_check(c1, c2, r1, r2)
+                    check, _ = utils.overlap_check(c1, c2, r1, r2)
                     if check:
                         self.perform_collision_scenario((i, j))
 
@@ -688,7 +720,7 @@ class Board(QWidget):
             initial_position = bullet.position
             for test_speed in range(int(bullet.speed)):
 
-                direction_vec = Utils.vector_from_angle(bullet.direction)
+                direction_vec = utils.vector_from_angle(bullet.direction)
                 movement_vec = direction_vec * test_speed
                 new_position = initial_position + movement_vec
                 bullet.position = new_position
@@ -701,7 +733,7 @@ class Board(QWidget):
     def col_robots_bullets(self, bullet):
         for robot in self.robots:
             robot_center = (robot.x, robot.y)
-            distance = Utils.distance(robot_center, bullet.position)
+            distance = utils.distance(robot_center, bullet.position)
             if distance <= robot.radius:
                 robot.deal_damage()
                 # robot.dead = True
@@ -713,10 +745,10 @@ class Board(QWidget):
         position = bullet.position
 
         tile_x = int(position[0] / TILE_SIZE)
-        tile_x = Utils.limit(tile_x, 0, Board.TILE_COUNT - 1)
+        tile_x = utils.limit(tile_x, 0, Board.TILE_COUNT - 1)
 
         tile_y = int(position[1] / TILE_SIZE)
-        tile_y = Utils.limit(tile_y, 0, Board.TILE_COUNT - 1)
+        tile_y = utils.limit(tile_y, 0, Board.TILE_COUNT - 1)
 
         if self.obstacleArray[tile_x][tile_y] != 0:
             self.bullets.remove(bullet)
@@ -778,13 +810,6 @@ class Board(QWidget):
             data.append((robot.x, robot.y))
 
         return SensorData(SensorData.ALERT_STRING, data, self.time_stamp)
-
-    # TODO this is just a frame implementation.
-    def create_bonk_message(self, collision):
-        print('B O N K')
-
-        data = None
-        return SensorData(SensorData.BONK_STRING, data, self.time_stamp)
 
     def create_position_message(self, robot):
 
@@ -856,477 +881,6 @@ class Hazard:
     Wall = 1
     Border = 2
     Hole = 3
-
-
-class DataRobot(BaseRobot):
-    """Data representation of the robots for the server."""
-
-    def __init__(self, base_robot: BaseRobot, thread_robot: ThreadRobot):
-
-        super().__init__(**vars(base_robot))
-
-        # current position
-        self.x = 0
-        self.y = 0
-        self.alpha = 0
-
-        self.v = 0
-        self.v_alpha = 0
-
-        self.gun = None
-
-        # Only some robots should receive an alert message.
-        self.alert_flag = False
-
-        self.thread_robot = thread_robot
-
-        self.player_control = None
-        self.player_control_active = False
-
-        # Use this when respawning the robot
-        self.dead = False
-        self.immune = False
-        self.life = self.max_life
-
-        # Access management system:
-        self.player_input_enabled = True         # inactive TODO
-        self.player_output_enabled = False
-        self.robot_input_enabled = True
-        self.robot_output_enabled = True
-
-        # self.player_gun_access = False
-        # self.robot_gun_access = True
-        self.gun_enabled = False
-
-    def place_robot(self, x, y, alpha, v, v_alpha):
-
-        self.x = x
-        self.y = y
-        self.alpha = alpha
-
-        self.v = v
-        self.v_alpha = v_alpha
-
-    def start(self):
-        self.thread_robot.run()
-
-    # Interface functions for the robot
-    # TODO allow hybrid models
-    def poll_action_data(self):
-
-        if self.player_output_enabled:
-            return self.player_control.send_action_data()
-
-        if self.robot_output_enabled:
-            return self.thread_robot.send_action_data()
-
-        # maybe adapt default data?
-        default_data = (0, 0)
-        return default_data
-
-    def send_sensor_data(self, data):
-        if self.robot_input_enabled:
-            self.thread_robot.receive_sensor_data(data)
-
-    # damage and respawn
-    def deal_damage(self, damage=1):
-        # we don't deal damage to dead or immune units
-        if self.immune or self.dead:
-            return
-
-        self.life = max(0, self.life - damage)
-        if self.life <= 0:
-            self.get_destroyed()
-
-    def get_destroyed(self):
-        self.dead = True
-
-        self.v = 0
-        self.v_alpha = 0
-
-        self.disable_robot_control()
-        self.disable_player_control()
-        self.disable_gun()
-
-        def respawn():
-            self.respawn()
-
-        Utils.execute_after(self.respawn_timer, respawn)
-
-    def respawn(self):
-        self.life = self.max_life
-        self.immune = True
-        point = self.x, self.y
-        Board.teleport_furthest_corner(point, self)
-
-        if self.player_control_active:
-            self.hand_control_to_player()
-        else:
-            self.hand_control_to_robot()
-
-        self.enable_gun()
-
-        self.dead = False
-
-        def disable_immunity():
-            self.immune = False
-
-        Utils.execute_after(1, disable_immunity)
-
-    # gun stuff
-    def perform_shoot_action(self):
-        """Will return a valid bullet, if the robot is shooting.
-        Else returns False.
-        """
-
-        maybe_bullet = False
-
-        if not self.gun or not self.gun_enabled:
-            return maybe_bullet
-
-        maybe_data = self.gun.trigger_fire()
-        if maybe_data:
-            angle = self.alpha
-
-            angle_vector = Utils.vector_from_angle(angle)
-            robot_center = (self.x, self.y)
-            bullet_start = robot_center + (self.radius + 1) * angle_vector
-            # bullet_start = (int(bullet_start[0]), int(bullet_start[1]))
-
-            # prevent bullets from standing still while moving backwards
-            speed = max(0, self.v) + maybe_data
-
-            maybe_bullet = Bullet(position=bullet_start,
-                                  speed=speed,
-                                  direction=angle)
-        return maybe_bullet
-
-    def setup_gun(self, gun=None):
-        """Set up gun communication between autonomous unit and server."""
-        if not gun:
-            gun = RoboGun()
-
-        self.gun = gun
-
-        gun_interface = GunInterface(gun)
-        self.thread_robot.setup_gun_interface(gun_interface)
-
-        self.enable_gun()
-
-        if self.player_control:
-            self.player_control.setup_gun(gun)
-
-    # player control
-    def enter_key_action(self, key, state=None):
-        if self.player_control:
-            self.player_control.calculate_key_action(key, state)
-
-    def finish_key_actions(self):
-        if self.player_control:
-            self.player_control.enter_entwined_keys()
-
-    def invasive_control(self, v_alpha):
-        if self.player_output_enabled:
-            self.v_alpha = v_alpha
-
-    def setup_player_control(self, player_control=None,
-                             control_scheme=None):
-        if not player_control:
-            if not control_scheme:
-                control_scheme = ControlScheme.default_scheme
-            player_control = PlayerControl(self, control_scheme)
-        self.player_control = player_control
-
-        if self.gun:
-            self.player_control.setup_gun(self.gun)
-
-        self.hand_control_to_player()
-
-    def toggle_player_control(self):
-        # we can't toggle while dead
-        if self.dead:
-            return
-
-        if self.player_control_active:
-            self.hand_control_to_robot()
-        else:
-            self.hand_control_to_player()
-
-    # right management
-    def hand_control_to_player(self):
-        # withdraw the rights for the robot
-        self.disable_robot_control()
-        self.disable_robot_gun_access()
-
-        # give the rights to the player
-        self.enable_player_control()
-        self.enable_player_gun_access()
-
-        # notify server, set the state
-        self.player_control_active = True
-
-    def hand_control_to_robot(self):
-        # withdraw rights of the player
-        self.disable_player_control()
-        self.disable_player_gun_acess()
-
-        # give the rights to the robot
-        self.enable_robot_control()
-        self.enable_robot_gun_access()
-
-        # notify server, set the state
-        self.player_control_active = False
-
-    def disable_robot_control(self):
-        self.robot_output_enabled = False
-        self.robot_input_enabled = False
-
-        self.thread_robot.clear_input()
-
-    def enable_robot_control(self):
-        self.thread_robot.clear_input()
-        self.thread_robot.clear_values()
-        self.robot_input_enabled = True
-        self.robot_output_enabled = True
-
-    def disable_player_control(self):
-        self.player_output_enabled = False
-
-    def enable_player_control(self):
-        self.player_output_enabled = True
-
-    def disable_robot_gun_access(self):
-        if self.gun:
-            self.gun.set_gun_access_robot(False)
-            # self.robot_gun_access = False
-            self.gun.clear_input()
-
-    def enable_robot_gun_access(self):
-        if self.gun:
-            self.gun.clear_input()
-            self.gun.set_gun_access_robot(True)
-            # self.robot_gun_access = True
-
-    def disable_player_gun_acess(self):
-        if self.gun:
-            self.gun.set_gun_access_player(False)
-            # self.player_gun_access = False
-            self.gun.clear_input()
-
-    def enable_player_gun_access(self):
-        if self.gun:
-            self.gun.clear_input()
-            self.gun.set_gun_access_player(True)
-            # self.player_gun_access = True
-
-    def disable_gun(self):
-        self.gun_enabled = False
-        self.disable_player_gun_acess()
-        self.disable_robot_gun_access()
-
-    def enable_gun(self):
-        self.gun_enabled = True
-        if self.player_control_active:
-            self.enable_player_gun_access()
-        else:
-            self.enable_robot_gun_access()
-
-    # optional flags
-    def set_alert_flag(self, value=True):
-        self.alert_flag = value
-
-    def set_resync_flag(self, value=True):
-        self.thread_robot.set_resync_flag(value)
-
-
-class PlayerControl:
-    ACCEL_AMT = 3
-    ALPHA_ACCEL_AMT = 5
-
-    STATE_ACTIVE = "A"
-    STATE_PUSH = "D"
-    STATE_INACTIVE = "I"
-
-    STATE_SWITCH = {(STATE_ACTIVE, True): STATE_ACTIVE,
-                    (STATE_INACTIVE, True): STATE_PUSH,
-                    (STATE_PUSH, True): STATE_ACTIVE,
-                    (STATE_ACTIVE, False): STATE_INACTIVE,
-                    (STATE_INACTIVE, False): STATE_INACTIVE,
-                    (STATE_PUSH, False): STATE_INACTIVE}
-
-    def __init__(self, data_robot, control_scheme, accel_amt=None,
-                 alpha_accel_amt=None, invasive_controls=False):
-
-        self.control_scheme = control_scheme
-
-        self.gun = None
-        self.data_robot = data_robot
-
-        self.a = 0
-        self.a_alpha = 0
-
-        # Smoothness of controls.
-        if not accel_amt:
-            accel_amt = PlayerControl.ACCEL_AMT
-        self.accel_amt = accel_amt
-        if not alpha_accel_amt:
-            alpha_accel_amt = PlayerControl.ALPHA_ACCEL_AMT
-        self.alpha_accel_amt = alpha_accel_amt
-
-        self.allow_toggle_autopilot = True
-
-        # State Machine for acc-rev_acc entwinement
-        self.acc_state = PlayerControl.STATE_INACTIVE
-        self.acc_rev_state = PlayerControl.STATE_INACTIVE
-
-        def acc():
-            self.a = self.accel_amt
-
-        def rev_acc():
-            self.a = -1 * self.accel_amt
-
-        def clear_acc():
-            self.a = 0
-
-        def acc_pass():
-            pass
-
-        self.acc_lookup = {(PlayerControl.STATE_INACTIVE, PlayerControl.STATE_INACTIVE): clear_acc,
-                           (PlayerControl.STATE_INACTIVE, PlayerControl.STATE_ACTIVE): rev_acc,
-                           (PlayerControl.STATE_INACTIVE, PlayerControl.STATE_PUSH): rev_acc,
-                           (PlayerControl.STATE_ACTIVE, PlayerControl.STATE_INACTIVE): acc,
-                           (PlayerControl.STATE_ACTIVE, PlayerControl.STATE_ACTIVE): acc_pass,
-                           (PlayerControl.STATE_ACTIVE, PlayerControl.STATE_PUSH): rev_acc,
-                           (PlayerControl.STATE_PUSH, PlayerControl.STATE_INACTIVE): acc,
-                           (PlayerControl.STATE_PUSH, PlayerControl.STATE_ACTIVE): acc,
-                           (PlayerControl.STATE_PUSH, PlayerControl.STATE_PUSH): acc}
-
-        # State Machine for left-right entwinement
-        self.left_state = PlayerControl.STATE_INACTIVE
-        self.right_state = PlayerControl.STATE_INACTIVE
-
-        def lr_left():
-            if invasive_controls:
-                self.data_robot.invasive_control(
-                    v_alpha=-1 * self.alpha_accel_amt)
-            else:
-                self.a_alpha = - 1 * self.alpha_accel_amt
-
-        def lr_right():
-            if invasive_controls:
-                self.data_robot.invasive_control(v_alpha=self.alpha_accel_amt)
-            else:
-                self.a_alpha = self.alpha_accel_amt
-
-        def clear_lr():
-            if invasive_controls:
-                self.data_robot.invasive_control(v_alpha=0)
-            else:
-                self.a_alpha = 0
-
-        def lr_pass():
-            pass
-
-        self.lr_lookup = {
-            (PlayerControl.STATE_INACTIVE, PlayerControl.STATE_INACTIVE): clear_lr,
-            (PlayerControl.STATE_INACTIVE, PlayerControl.STATE_ACTIVE): lr_right,
-            (PlayerControl.STATE_INACTIVE, PlayerControl.STATE_PUSH): lr_right,
-            (PlayerControl.STATE_ACTIVE, PlayerControl.STATE_INACTIVE): lr_left,
-            (PlayerControl.STATE_ACTIVE, PlayerControl.STATE_ACTIVE): lr_pass,
-            (PlayerControl.STATE_ACTIVE, PlayerControl.STATE_PUSH): lr_right,
-            (PlayerControl.STATE_PUSH, PlayerControl.STATE_INACTIVE): lr_left,
-            (PlayerControl.STATE_PUSH, PlayerControl.STATE_ACTIVE): lr_left,
-            (PlayerControl.STATE_PUSH, PlayerControl.STATE_PUSH): clear_lr}
-
-    def calculate_key_action(self, key, state):
-        action_name = self.control_scheme[key]
-        action = getattr(self, action_name)
-        # stateless
-        # TODO distinguish between stateles keys and keys with state
-        if state is None:
-            action()
-        else:
-            action(state_active=state)
-
-    def enter_entwined_keys(self):
-        self.enter_accelarate()
-        self.enter_left_right()
-
-    def accelerate(self, state_active):
-        lookup_tuple = (self.acc_state, state_active)
-        self.acc_state = PlayerControl.STATE_SWITCH[lookup_tuple]
-
-    def accelerate_reverse(self, state_active):
-        lookup_tuple = (self.acc_rev_state, state_active)
-        self.acc_rev_state = PlayerControl.STATE_SWITCH[lookup_tuple]
-
-    def enter_accelarate(self):
-        lookup_tuple = (self.acc_state, self.acc_rev_state)
-        func = self.acc_lookup[lookup_tuple]
-        func()
-
-    def left(self, state_active):
-        lookup_tuple = (self.left_state, state_active)
-        self.left_state = PlayerControl.STATE_SWITCH[lookup_tuple]
-
-    def right(self, state_active):
-        lookup_tuple = (self.right_state, state_active)
-        self.right_state = PlayerControl.STATE_SWITCH[lookup_tuple]
-
-    def enter_left_right(self):
-        lookup_tuple = (self.left_state, self.right_state)
-        func = self.lr_lookup[lookup_tuple]
-        func()
-
-    def shoot(self, state_active):
-        if state_active:
-            self.gun.prepare_fire_player()
-
-    def toggle_autopilot(self):
-        if self.allow_toggle_autopilot:
-            self.data_robot.toggle_player_control()
-
-            def enable_toggle():
-                self.allow_toggle_autopilot = True
-
-            self.allow_toggle_autopilot = False
-            Utils.execute_after(0.5, enable_toggle)
-
-    def send_action_data(self):
-        return self.a, self.a_alpha
-
-    def setup_gun(self, gun):
-        self.gun = gun
-
-
-class ControlScheme:
-    ACC_STRING = 'accelerate'
-    ACC_REV_STRING = 'accelerate_reverse'
-    LEFT_STRING = 'left'
-    RIGHT_STRING = 'right'
-    SHOOT_STRING = 'shoot'
-    AUTOPILOT_STRING = 'toggle_autopilot'
-
-    default_scheme = {Qt.Key_W: ACC_STRING,
-                      Qt.Key_S: ACC_REV_STRING,
-                      Qt.Key_A: LEFT_STRING,
-                      Qt.Key_D: RIGHT_STRING,
-                      Qt.Key_J: SHOOT_STRING,
-                      Qt.Key_P: AUTOPILOT_STRING}
-
-    player_two_scheme = {Qt.Key_Up: ACC_STRING,
-                         Qt.Key_Down: ACC_REV_STRING,
-                         Qt.Key_Left: LEFT_STRING,
-                         Qt.Key_Right: RIGHT_STRING,
-                         Qt.Key_Return: SHOOT_STRING,
-                         Qt.Key_End: AUTOPILOT_STRING}
-
-
-class Bullet:
-    def __init__(self, position, speed, direction):
-        self.position = position
-        self.speed = speed
-        self.direction = direction
 
 
 if __name__ == '__main__':

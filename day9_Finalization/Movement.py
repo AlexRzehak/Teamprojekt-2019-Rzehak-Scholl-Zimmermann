@@ -3,7 +3,7 @@ import math
 
 
 class Movement:
-    """Implement different movement options."""
+    """Implement different movement responses."""
 
     def default(self, data, robot):
         return robot.a, robot.a_alpha
@@ -15,9 +15,6 @@ class Movement:
         return robot.a, robot.a_alpha
 
     def alert(self, data, robot):
-        return robot.a, robot.a_alpha
-
-    def bonk(self, data, robot):
         return robot.a, robot.a_alpha
 
 
@@ -247,9 +244,14 @@ class SimpleAvoidMovement(Movement):
 
 class RunMovement(Movement):
 
+    def __init__(self):
+        self.current_threat = None
+
     def alert(self, data, robot):
-        robot.robomap = data
-        robot.threat = prime_robot(data)
+        self.current_threat = prime_robot(data)
+        # TODO delete this
+        # TODO this WILL blow up!
+        # robot.threat = prime_robot(data)
         return robot.a, robot.a_alpha
 
     def vision(self, data, robot):
@@ -277,7 +279,9 @@ class RunMovement(Movement):
             obj_distance = robot.destination[1]
 
         # calculate robot data
-        threat = robot.threat
+        threat = self.current_threat
+        # TODO delete this
+        # threat = robot.threat
         threat_coordinates = threat[0]
         threat_angle = calculate_angle_between_vectors(
             threat_coordinates, x, y, v, alpha)
