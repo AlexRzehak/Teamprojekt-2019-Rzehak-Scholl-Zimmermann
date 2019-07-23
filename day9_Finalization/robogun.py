@@ -28,10 +28,9 @@ import utils
 
 class RoboGun:
     """Controller object for thread safe yet instantaneous attack commands."""
-    BULLET_SPEED = 12
     FIRE_QUEUE_SIZE = 20
 
-    def __init__(self, bullet_speed=None, reload_speed=1):
+    def __init__(self, bullet_speed, reload_speed):
 
         # Main relay of thread safe communication.
         self._fire_queue = queue.Queue(RoboGun.FIRE_QUEUE_SIZE)
@@ -39,8 +38,6 @@ class RoboGun:
         # Bullet properties.
         # ADD: You can add addditional bullet information here.
         self.bullet_speed = bullet_speed
-        if not bullet_speed:
-            self.bullet_speed = RoboGun.BULLET_SPEED
 
         # Reload properties.
         self.reload_speed = reload_speed

@@ -73,41 +73,31 @@ class Board(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
 
-        # TODO
-        config_reader = config_provider.ConfigReader()
-        config_reader.read_level('level1.txt')
-        self.obstacleArray = config_reader.create_level()
-        self.rectangles = self.group_tiles_into_rectangles(self.obstacleArray)
-
-        # self.robots = scenario.deploy_robots_from_config()
-
-        # self.obstacleArray = utils.create_example_array(Board.TILE_COUNT)
-
-        # Create an additional obstacle list from array
-        # storing the position values of every obstacle.
-        # Since we don't change the obstacleArray,
-        # this call is only needed once.
-        self.obstacle_list = utils.generate_obstacle_list(
-            self.obstacleArray, Board.TILE_COUNT)
-
         self.time_stamp = -1
 
         self.init_textures()
 
+        # Read config files and construct robots:
+        # First, create config reader instance
+        config_reader = config_provider.ConfigReader()
+
+        # Then read level and construct obstacles
+        config_reader.read_level('level1.txt')
+        self.obstacleArray = config_reader.create_level()
+        self.obstacle_list = utils.generate_obstacle_list(
+            self.obstacleArray, Board.TILE_COUNT)
+        self.rectangles = self.group_tiles_into_rectangles(self.obstacleArray)
+
+        # Finally read robot config and create robots
+        config_reader.read_robots()
         # Store data representations of all involved robot units.
-        self.robots = []
+        self.robots = config_reader.create_robots()
 
         # Data representations of bullets.
         self.bullets = set()
 
         # Used by example extension.
         self.collision_scenarios = dict()
-
-        # Initiate board state and game parameters.
-        # samurai TODO
-        # self.create_scenario()
-        config_reader.read_robots()
-        self.robots = config_reader.create_robots()
 
         # Inititate key listener.
         self.key_states = dict()
@@ -465,7 +455,7 @@ class Board(QWidget):
                 last_y = tile_y
                 if tile_type and not in_row[tile_x][tile_y]:
                     for x in range(100):
-                        neighbour_x = Utils.limit(tile_x + x, 0, 99)
+                        neighbour_x = utils.limit(tile_x + x, 0, 99)
                         if tile_type == self.obstacleArray[neighbour_x][tile_y]:
                             last_x = neighbour_x
                             in_row[neighbour_x][tile_y] = True
@@ -473,7 +463,7 @@ class Board(QWidget):
                             break
                 if tile_type and not in_col[tile_x][tile_y]:
                     for y in range(100):
-                        neighbour_y = Utils.limit(tile_y + y, 0, 99)
+                        neighbour_y = utils.limit(tile_y + y, 0, 99)
                         if tile_type == self.obstacleArray[tile_x][neighbour_y]:
                             last_y = neighbour_y
                             in_col[tile_x][neighbour_y] = True
@@ -569,14 +559,14 @@ class Board(QWidget):
                 dx += dx_step
                 robot_center = QPointF(
                     dx + robot.x, dy + robot.y - 1 * dy_step)
-                x_collided = Utils.check_collision_circle_rect(
+                x_collided = utils.check_collision_circle_rect(
                     robot_center, robot.radius, tile_origin, rect[2], rect[3])
 
             if not y_collided:
                 dy += dy_step
                 robot_center = QPointF(
                     dx + robot.x - 1 * dx_step, dy + robot.y)
-                y_collided = Utils.check_collision_circle_rect(
+                y_collided = utils.check_collision_circle_rect(
                     robot_center, robot.radius, tile_origin, rect[2], rect[3])
 
             if x_collided and y_collided:

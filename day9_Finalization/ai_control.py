@@ -4,7 +4,7 @@ import threading
 from collections import deque
 
 from model import BaseRobot
-from Movement import Movement
+from movement import Movement
 
 # ==================================
 # AI Control

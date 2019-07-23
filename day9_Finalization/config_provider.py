@@ -8,7 +8,7 @@ from model import BaseRobot, DataRobot
 from robogun import RoboGun
 from ai_control import RobotControl
 from player_control import PlayerControl, ControlScheme
-import Movement
+import movement
 import utils
 
 
@@ -84,10 +84,10 @@ AVAILABLE_MOVEMENTS = {'Movement',
 # These fallback values must be valid, since they remain unchecked,
 # so please be careful changing them!
 ROBOT_FALLBACK = {'radius': 3,
-                  'a_max': 15,
+                  'a_max': 10,
                   'a_alpha_max': 10,
-                  'v_max': 50,
-                  'v_alpha_max': 90,
+                  'v_max': 30,
+                  'v_alpha_max': 45,
                   'fov_angle': 90,
                   'max_life': 3,
                   'respawn_timer': 3,
@@ -559,7 +559,7 @@ class ConfigReader:
             movement_name = movement_list[0]
             movement_option_list = movement_list[1:]
             if movement_name in AVAILABLE_MOVEMENTS:
-                movement_class = getattr(Movement, movement_name)
+                movement_class = getattr(movement, movement_name)
                 options_valid, option_list = self.assemble_movement_options(
                     movement_class.OPTIONS, movement_option_list)
                 if options_valid:
@@ -572,7 +572,7 @@ class ConfigReader:
             movement_name = movement_list[0]
             movement_option_list = movement_list[1:]
             if movement_name in AVAILABLE_MOVEMENTS:
-                movement_class = getattr(Movement, movement_name)
+                movement_class = getattr(movement, movement_name)
                 options_valid, option_list = self.assemble_movement_options(
                     movement_class.OPTIONS, movement_option_list)
                 if options_valid:
@@ -583,7 +583,7 @@ class ConfigReader:
         fallback_list = split_string_list(fallback_string)
         fallback_name = fallback_list[0]
         fallback_option_list = fallback_list[1:]
-        fallback_class = getattr(Movement, fallback_name)
+        fallback_class = getattr(movement, fallback_name)
         _, parsed_option_list = self.assemble_movement_options(
             fallback_class.OPTIONS, fallback_option_list)
 
@@ -601,7 +601,7 @@ class ConfigReader:
         # ADD: When you add a new movement option,
         # add a mapping to the validator here:
         movement_validators = {
-            Movement.TARGET_OPTION_STRING: self.validate_target_option}
+            movement.TARGET_OPTION_STRING: self.validate_target_option}
 
         result_list = []
 
