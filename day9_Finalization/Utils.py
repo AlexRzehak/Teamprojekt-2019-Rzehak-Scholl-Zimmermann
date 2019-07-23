@@ -215,6 +215,4 @@ def create_example_array(size: int):
         array[int(size/3)][i] = 1
         array[int(size / 4 * 3)][i] = 1
 
-
-
     return array

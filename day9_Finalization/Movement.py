@@ -22,7 +22,7 @@ class Movement:
 
 
 class RandomMovement(Movement):
-
+    # sets a and alpha to random values
     def position(self, data, robot):
 
         x, y, alpha, v, v_alpha = data
@@ -37,7 +37,7 @@ class RandomMovement(Movement):
 
 
 class NussschneckeMovement(Movement):
-
+    # accelerates to a certain speed while turning, then retains speed and turning speed
     def position(self, data, robot):
 
         x, y, alpha, v, v_alpha = data
@@ -53,7 +53,7 @@ class NussschneckeMovement(Movement):
 
 
 class SpiralMovement(Movement):
-
+    # accelerates to a certain speed while turning, then keeps accelerating while retaining turn speed
     def position(self, data, robot):
 
         x, y, alpha, v, v_alpha = data
@@ -69,13 +69,13 @@ class SpiralMovement(Movement):
 
 
 class SpinMovement(Movement):
-
+    # keeps accelerating to a set speed
     def position(self, data, robot):
 
         x, y, alpha, v, v_alpha = data
 
         a = 0
-        a_alpha = 99999999
+        a_alpha = math.inf
         if v_alpha > 30:
             a = 0
             a_alpha = 0
@@ -83,11 +83,10 @@ class SpinMovement(Movement):
 
 
 class FollowMovement(Movement):
-    # TODO fix self follow Error
+    # follows a given Robot
     def __init__(self, target):
         self.target = target
 
-    # simple variant without extrapolation
     def alert(self, data, robot):
         # setting robot destination to the coordinates of target robot
         robot.destination = data[self.target]
@@ -142,7 +141,7 @@ class FollowMovement(Movement):
 
 
 class RandomTargetMovement(Movement):
-    # TODO fix self follow Error
+    # moves towards a random target, which is generated with every alert
     def alert(self, data, robot):
         # setting robot destination to the coordinates of target robot
         robot.destination = (random.randint(10, 990), random.randint(10, 990))
@@ -155,7 +154,6 @@ class RandomTargetMovement(Movement):
         if not robot.destination:
             destination_x = x
             destination_y = y
-            # TODO fix stuff
             return robot.a, robot.a_alpha
         else:
             destination_x = robot.destination[0]
@@ -198,7 +196,7 @@ class RandomTargetMovement(Movement):
 
 
 class SimpleAvoidMovement(Movement):
-
+    # moves straight and avoids objects in the field of view
     def vision(self, data, robot):
         robot.destination = prime_object(data)
         return robot.a, robot.a_alpha
@@ -213,12 +211,8 @@ class SimpleAvoidMovement(Movement):
         obj_coordinates = (
             obj_position[0] * tile_size + 5, obj_position[1] * tile_size + 5)
 
-        if robot.destination[1] == 1 or robot.destination[1] == 2 or robot.destination[1] == 3:
-            obj_type = "wall"
-            obj_distance = robot.destination[2]
-        else:
-            obj_type = "robot"
-            obj_distance = robot.destination[1]
+        # determine object type and distance
+        obj_type, obj_distance = set_object_info(robot)
 
         # calculate object angle
         obj_angle = calculate_angle_between_vectors(
@@ -246,9 +240,8 @@ class SimpleAvoidMovement(Movement):
 
 
 class RunMovement(Movement):
-
+    # turns away from closest robot or close objects
     def alert(self, data, robot):
-        robot.robomap = data
         robot.threat = prime_robot(data)
         return robot.a, robot.a_alpha
 
@@ -269,12 +262,8 @@ class RunMovement(Movement):
             obj_position[0] * tile_size + 5, obj_position[1] * tile_size + 5)
         obj_angle = calculate_angle_between_vectors(
             obj_coordinates, x, y, v, alpha)
-        if robot.destination[1] == 1 or robot.destination[1] == 2 or robot.destination[1] == 3:
-            obj_type = "wall"
-            obj_distance = robot.destination[2]
-        else:
-            obj_type = "robot"
-            obj_distance = robot.destination[1]
+        # determine object type and distance
+        obj_type, obj_distance = set_object_info(robot)
 
         # calculate robot data
         threat = robot.threat
@@ -307,6 +296,7 @@ class RunMovement(Movement):
 
 
 class ChaseMovement(Movement):
+    # moves to given robot, searches if it is not in vision
     def __init__(self, target):
         self.target = target
 
@@ -334,6 +324,8 @@ class ChaseMovement(Movement):
 
 
 class ChaseMovementGun(Movement):
+    # moves to given robot, searches if it is not in vision
+    # shoots if target is straight ahead
     def __init__(self, target):
         self.target = target
 
@@ -360,7 +352,8 @@ class ChaseMovementGun(Movement):
 
 
 class SimpleAvoidMovementGun(Movement):
-
+    # moves straight and avoids objects in the field of view
+    # shoots if target is straight ahead
     def vision(self, data, robot):
         robot.destination = prime_object(data)
         return robot.a, robot.a_alpha
@@ -372,16 +365,12 @@ class SimpleAvoidMovementGun(Movement):
             v = 0.001
         v_max = 10
         tile_size = 10
+
         obj_position = robot.destination[0]
         obj_coordinates = (
             obj_position[0] * tile_size + 5, obj_position[1] * tile_size + 5)
-
-        if robot.destination[1] == 1 or robot.destination[1] == 2 or robot.destination[1] == 3:
-            obj_type = "wall"
-            obj_distance = robot.destination[2]
-        else:
-            obj_type = "robot"
-            obj_distance = robot.destination[1]
+        # determine object type and distance
+        obj_type, obj_distance = set_object_info(robot)
 
         # calculate object angle
         obj_angle = calculate_angle_between_vectors(
@@ -413,14 +402,15 @@ class SimpleAvoidMovementGun(Movement):
 
 
 class PermanentGunMovement(RandomTargetMovement):
-
+    # shoots as much as possible, doesn't move
     def position(self, data, robot):
         robot.shoot()
         return super().position(data, robot)
 
 
 class ChaseAvoidMovement(Movement):
-
+    # moves to given robot, searches if it is not in vision
+    # avoids close objects
     def __init__(self, target):
         self.target = target
 
@@ -460,12 +450,18 @@ class ChaseAvoidMovement(Movement):
 
 
 class ChaseAvoidMovementGun(ChaseAvoidMovement):
+    # moves to given robot, searches if it is not in vision
+    # shoots if target is straight ahead, avoids close objects
     def position(self, data, robot):
         shoot_straight(robot, data)
         return super().position(data, robot)
 
+# ---------------
+# Help Functions
+# ---------------
 
 def calculate_distance(a_x, a_y, b_x, b_y):
+    # calculates distance between points
     v_x = b_x - a_x
     v_y = b_y - a_y
     distance = math.sqrt(v_x ** 2 + v_y ** 2)
@@ -484,6 +480,7 @@ def calc_cross_product(B, P):
 
 
 def calculate_vector(magnitude, angle):
+    # calculates a vector
     radian = (angle / 180 * math.pi)
     vector_x = (magnitude * math.sin(radian))
     vector_y = - (magnitude * math.cos(radian))
@@ -492,6 +489,7 @@ def calculate_vector(magnitude, angle):
 
 
 def calculate_vector_between_points(obj_position, x, y):
+    # calculates vector between 2 points
     object_vector_x = obj_position[0] - x
     object_vector_y = obj_position[1] - y
     object_vector = (object_vector_x, object_vector_y)
@@ -499,6 +497,7 @@ def calculate_vector_between_points(obj_position, x, y):
 
 
 def calculate_angle_between_vectors(obj_position, x, y, v, alpha):
+    # calculates the angle between coordinates, represented as vectors
     object_vector_x = obj_position[0] - x
     object_vector_y = obj_position[1] - y
     object_vector_magnitude = math.sqrt(
@@ -532,6 +531,7 @@ def calculate_angle_between_vectors(obj_position, x, y, v, alpha):
 
 
 def calculate_direction(main_vector, second_vector):
+    # calculates in which relative direction the second vector points
     cross_product = calc_cross_product(
         (main_vector[0], main_vector[1]),
         (second_vector[0], second_vector[1]))
@@ -546,7 +546,7 @@ def calculate_direction(main_vector, second_vector):
 
 
 def calculate_threshold(obj_type, v, alpha, v_alpha, v_max, robot):
-    # distance to object at which the robot starts acting
+    # calculates the distance to an object at which the robot starts acting
     if obj_type == "wall":
         delta_alpha = 90
         obj_size = 10
@@ -578,6 +578,16 @@ def calculate_destination_alpha(vec1, vec2, vec1_magnitude, vec2_magnitude):
     destination_alpha_degree = (destination_alpha * 180 / math.pi) % 360
     return destination_alpha_degree
 
+
+def set_object_info(robot):
+    # interprets destination to determine object type and distance
+    if robot.destination[1] == 1 or robot.destination[1] == 2 or robot.destination[1] == 3:
+        obj_type = "wall"
+        obj_distance = robot.destination[2]
+    else:
+        obj_type = "robot"
+        obj_distance = robot.destination[1]
+    return obj_type, obj_distance
 
 def set_delta_alpha(obj_type, distance, threshold, obj_angle, turn_direction, v_alpha):
     # set delta_alpha based on obstacle type and distance
@@ -632,6 +642,7 @@ def set_run_delta_alpha(obj_type, distance, threshold, obj_angle, turn_direction
 
 
 def set_angle_sign(angle, direction):
+    # gives a sign to the angle based on turning direction
     if direction == "right":
         signed_angle = angle
     elif direction == "left":
@@ -670,14 +681,16 @@ def set_acceleration(velocity, v_max):
         a = 0
     return a
 
-
 def search(array_tuple, pos):
+    # takes robot out of array of robots
+    # returns false if the robot is not in the robot array
     robot_array = array_tuple[1]
     found_bot = robot_array[pos]
     return found_bot
 
 
 def prime_object(array_tuple):
+    # identifies the most significant object of an object array
     robot_array = array_tuple[1]
     obstacle_array = array_tuple[0]
     significance = math.inf
@@ -705,6 +718,7 @@ def prime_object(array_tuple):
 
 
 def prime_robot(array):
+    # identifies the most significant robot of a robot array
     distance_array = []
     robot_x = array[0][0]
     robot_y = array[0][1]
@@ -724,6 +738,7 @@ def prime_robot(array):
 
 def print_info(boolean, velocity_vector, object_vector, threshold, turn_direction, delta_alpha, a, a_alpha,
                obj_distance, obj_angle, robot):
+    # prints a bunch of data
     if boolean:
         print("Object: " + str(robot.destination))
         print("Vv: " + str(velocity_vector))
@@ -739,6 +754,8 @@ def print_info(boolean, velocity_vector, object_vector, threshold, turn_directio
 
 
 def position_destination_robot(self, data, robot):
+    # sets acceleration and angle_acceleration to move towards a robot
+    # that is stored in destination
     x, y, alpha, v, v_alpha = data
 
     # setting the robots destination
@@ -778,8 +795,10 @@ def position_destination_robot(self, data, robot):
 
     return a, a_alpha
 
-
+# Shooting behaviours
+# -------------------
 def shoot_straight(robot, data):
+    # enqueues a shot if aim is crosses target robot
     x, y, alpha, v, v_alpha = data
     if type(robot.destination) == tuple:
         coordinates = robot.destination[0]
@@ -796,7 +815,7 @@ def shoot_straight(robot, data):
 
 
 def calculate_inaccuracy(position, coordinates, alpha, vel):
-    # For angles < 90
+    # calculates inaccuracy of given position, angle and target coordinates
     x = position[0]
     y = position[1]
     c_x = coordinates[0]
