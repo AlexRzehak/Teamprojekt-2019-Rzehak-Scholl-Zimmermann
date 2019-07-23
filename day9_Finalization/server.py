@@ -86,7 +86,7 @@ class Board(QWidget):
         self.obstacleArray = config_reader.create_level()
         self.obstacle_list = utils.generate_obstacle_list(
             self.obstacleArray, Board.TILE_COUNT)
-        self.rectangles = self.group_tiles_into_rectangles(self.obstacleArray)
+        self.rectangles = utils.group_tiles_into_rectangles(self.obstacleArray)
 
         # Finally read robot config and create robots
         config_reader.read_robots()
@@ -446,45 +446,6 @@ class Board(QWidget):
     # Collision Area
     # ==================================
 
-    # TODO  1. put this in the proper part of this class
-    #       2. fix this and make it pretty
-    def group_tiles_into_rectangles(self, tiles_array):
-        rects = []
-        in_rects = [[False] * Board.TILE_COUNT for _ in range(Board.TILE_COUNT)]
-        for tile_x in range(Board.TILE_COUNT):
-            for tile_y in range(Board.TILE_COUNT):
-                tile_type = self.obstacleArray[tile_x][tile_y]
-                last_x = tile_x
-                last_y = tile_y
-                if tile_type and not in_rects[tile_x][tile_y]:
-                    for neighbour_x in range(tile_x + 1, Board.TILE_COUNT):
-                        if tile_type == self.obstacleArray[neighbour_x][tile_y]:
-                            last_x = neighbour_x
-                            in_rects[neighbour_x][tile_y] = True
-                            in_rects[tile_x][tile_y] = True
-                        else:
-                            break
-                if tile_type and not in_rects[tile_x][tile_y]:
-                    for neighbour_y in range(tile_y + 1, Board.TILE_COUNT):
-                        if tile_type == self.obstacleArray[tile_x][neighbour_y]:
-                            last_y = neighbour_y
-                            in_rects[tile_x][neighbour_y] = True
-                            in_rects[tile_x][tile_y] = True
-                        else:
-                            break
-                if tile_type:
-                    rect_x = tile_x * TILE_SIZE
-                    rect_y = tile_y * TILE_SIZE
-                    row_len = (last_x - tile_x) * TILE_SIZE + TILE_SIZE
-                    col_len = (last_y - tile_y) * TILE_SIZE + TILE_SIZE
-                    if not tile_x == last_x:
-                        rects.append((rect_x, rect_y, row_len, TILE_SIZE, tile_type))
-                    if not tile_y == last_y:
-                        rects.append((rect_x, rect_y, TILE_SIZE, col_len, tile_type))
-                    if not in_rects[tile_x][tile_y]:
-                        rects.append((rect_x, rect_y, TILE_SIZE, TILE_SIZE, tile_type))
-        return rects
-
     def calculate_robot(self, poll, robot):
         """Uses current position data of robot robot and acceleration values
         polled from the robot to calculate new position values.
@@ -590,7 +551,6 @@ class Board(QWidget):
 
         return dx, dy
 
-    # TODO we might improve that function
     def check_collision_robots(self):
         s = len(self.robots)
         for i in range(s):
