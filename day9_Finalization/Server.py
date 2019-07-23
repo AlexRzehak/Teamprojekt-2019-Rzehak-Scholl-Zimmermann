@@ -1,5 +1,6 @@
 import sys
 import math
+import random
 from functools import partial
 from dataclasses import dataclass
 
@@ -112,7 +113,7 @@ class Board(QWidget):
             TILE_SIZE * 2, mv4, 15, 15, pos4, gun=gun4)
         # robo4.set_alert_flag()
         self.deploy_robot(robo4)
-        
+
         # Then add scenario recipes.
         # self.create_catch_recipe(0, [3, 1, 2])
 
@@ -222,6 +223,33 @@ class Board(QWidget):
 
                 elif tileVal == Hazard.Hole:
                     texture = QPixmap("textures/hole.png")
+                    qp.save()
+                    source = QRectF(0, 0, 10, 10)
+                    target = QRectF(xpos * TILE_SIZE, ypos *
+                                    TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                    qp.drawPixmap(target, texture, source)
+                    qp.restore()
+
+                elif tileVal == Hazard.Asteroids:
+                    texture = QPixmap("textures/hole.png")
+                    qp.save()
+                    source = QRectF(0, 0, 10, 10)
+                    target = QRectF(xpos * TILE_SIZE, ypos *
+                                    TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                    qp.drawPixmap(target, texture, source)
+                    qp.restore()
+
+                elif tileVal == Hazard.boost_up:
+                    texture = QPixmap("textures/up.png")
+                    qp.save()
+                    source = QRectF(0, 0, 10, 10)
+                    target = QRectF(xpos * TILE_SIZE, ypos *
+                                    TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                    qp.drawPixmap(target, texture, source)
+                    qp.restore()
+
+                elif tileVal == Hazard.boost_down:
+                    texture = QPixmap("textures/down.png")
                     qp.save()
                     source = QRectF(0, 0, 10, 10)
                     target = QRectF(xpos * TILE_SIZE, ypos *
@@ -440,27 +468,26 @@ class Board(QWidget):
     #       2. fix this and make it pretty
     def group_tiles_into_rectangles(self, tiles_array):
         rects = []
-        in_row = [[False] * 100 for _ in range(100)]
-        in_col = [[False] * 100 for _ in range(100)]
+        in_rects = [[False] * 100 for _ in range(100)]
         for tile_x in range(100):
             for tile_y in range(100):
                 tile_type = self.obstacleArray[tile_x][tile_y]
                 last_x = tile_x
                 last_y = tile_y
-                if tile_type and not in_row[tile_x][tile_y]:
-                    for x in range(100):
-                        neighbour_x = Utils.limit(tile_x + x, 0, 99)
+                if tile_type and not in_rects[tile_x][tile_y]:
+                    for neighbour_x in range(tile_x + 1, 100):
                         if tile_type == self.obstacleArray[neighbour_x][tile_y]:
                             last_x = neighbour_x
-                            in_row[neighbour_x][tile_y] = True
+                            in_rects[neighbour_x][tile_y] = True
+                            in_rects[tile_x][tile_y] = True
                         else:
                             break
-                if tile_type and not in_col[tile_x][tile_y]:
-                    for y in range(100):
-                        neighbour_y = Utils.limit(tile_y + y, 0, 99)
+                if tile_type and not in_rects[tile_x][tile_y]:
+                    for neighbour_y in range(tile_y + 1, 100):
                         if tile_type == self.obstacleArray[tile_x][neighbour_y]:
                             last_y = neighbour_y
-                            in_col[tile_x][neighbour_y] = True
+                            in_rects[tile_x][neighbour_y] = True
+                            in_rects[tile_x][tile_y] = True
                         else:
                             break
                 if tile_type:
@@ -472,6 +499,8 @@ class Board(QWidget):
                         rects.append((rect_x, rect_y, row_len, 10, tile_type))
                     if not tile_y == last_y:
                         rects.append((rect_x, rect_y, 10, col_len, tile_type))
+                    if not in_rects[tile_x][tile_y]:
+                        rects.append((rect_x, rect_y, 10, 10, tile_type))
         return rects
 
     def calculate_robot(self, poll, robot):
@@ -534,6 +563,22 @@ class Board(QWidget):
             robot.deal_damage(1000)
             v = 0
             v_alpha = 0
+        if final_tile_type == 5:
+            robot.deal_damage(v/200)
+            if robot.life != 0:
+                min_dx = max_dx/2
+                min_dy = max_dy/2
+            else:
+                v = 0
+                v_alpha = 0
+
+        if final_tile_type == 10:
+            if max_dy < 0:
+                min_dy = abs(max_dy) * -2
+
+        if final_tile_type == 11:
+            if max_dy > 0:
+                min_dy = abs(max_dy) * 2
 
         return min_dx, min_dy, v, v_alpha
 
@@ -618,13 +663,6 @@ class Board(QWidget):
                         self.col_robots_bullets(bullet)):
                     break
 
-        # respawn the robots
-        # for robot in self.robots:
-        #     if robot.dead:
-        #         pos = (robot.x, robot.y)
-        #         Board.teleport_furthest_corner(pos, robot)
-        #         robot.dead = False
-
     def col_robots_bullets(self, bullet):
         for robot in self.robots:
             robot_center = (robot.x, robot.y)
@@ -644,11 +682,10 @@ class Board(QWidget):
 
         tile_y = int(position[1] / TILE_SIZE)
         tile_y = Utils.limit(tile_y, 0, Board.TileCount - 1)
-
-        if self.obstacleArray[tile_x][tile_y] != 0:
+        tile_type = self.obstacleArray[tile_x][tile_y]
+        if 0 < tile_type < 10:
             self.bullets.remove(bullet)
             return True
-
         return False
 
     # ==================================
@@ -679,7 +716,7 @@ class Board(QWidget):
 
     def handle_keys_with_state(self):
         for key, value in self.key_states.items():
-            # state is acitve
+            # state is active
             if value['is_pressed'] or value['was_pressed']:
                 # TODO maybe only call when needed
                 value['was_pressed'] = False
@@ -724,6 +761,8 @@ class Board(QWidget):
             for robot in self.robots:
                 if robot.alert_flag:
                     robot.send_sensor_data(m)
+
+        self.obstacleArray[10][10] == 1
 
         # TODO we might improve that function
         self.check_collision_robots()
@@ -826,6 +865,9 @@ class Hazard:
     Wall = 1
     Border = 2
     Hole = 3
+    Asteroids = 5
+    boost_up = 10
+    boost_down = 11
 
 
 class DataRobot(BaseRobot):
