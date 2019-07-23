@@ -144,6 +144,11 @@ class RoboGun:
     # ==================================
     # ADD: You can add more decorators here
     # to change a gun's behaviour independent from its type.
+    @staticmethod
+    def available_gun_options():
+        # ADD HERE: If you added more gun options,
+        # enter them here so the parser knows them.
+        return {'trigun': RoboGun.trigun_decorator}
 
     @staticmethod
     def trigun_decorator(gun):

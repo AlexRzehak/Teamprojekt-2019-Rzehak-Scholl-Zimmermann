@@ -1,9 +1,13 @@
 import random
 import math
 
+TARGET_OPTION_STRING = 'target'
 
 class Movement:
     """Implement different movement responses."""
+
+    RECEIVE_ALERT = False
+    OPTIONS = []
 
     def default(self, data, robot):
         return robot.a, robot.a_alpha
@@ -80,6 +84,10 @@ class SpinMovement(Movement):
 
 
 class FollowMovement(Movement):
+
+    RECEIVE_ALERT = True
+    OPTIONS = [TARGET_OPTION_STRING]
+
     # TODO fix self follow Error
     def __init__(self, target):
         self.target = target
@@ -139,6 +147,9 @@ class FollowMovement(Movement):
 
 
 class RandomTargetMovement(Movement):
+
+    RECEIVE_ALERT = True
+
     # TODO fix self follow Error
     def alert(self, data, robot):
         # setting robot destination to the coordinates of target robot
@@ -244,6 +255,8 @@ class SimpleAvoidMovement(Movement):
 
 class RunMovement(Movement):
 
+    RECEIVE_ALERT = True
+
     def __init__(self):
         self.current_threat = None
 
@@ -281,6 +294,7 @@ class RunMovement(Movement):
         # calculate robot data
         threat = self.current_threat
         # TODO delete this
+        # TODO crash when no alert
         # threat = robot.threat
         threat_coordinates = threat[0]
         threat_angle = calculate_angle_between_vectors(
@@ -311,6 +325,9 @@ class RunMovement(Movement):
 
 
 class ChaseMovement(Movement):
+
+    OPTIONS = [TARGET_OPTION_STRING]
+
     def __init__(self, target):
         self.target = target
 
@@ -338,6 +355,9 @@ class ChaseMovement(Movement):
 
 
 class ChaseMovementGun(Movement):
+
+    OPTIONS = [TARGET_OPTION_STRING]
+
     def __init__(self, target):
         self.target = target
 
@@ -424,6 +444,8 @@ class PermanentGunMovement(RandomTargetMovement):
 
 
 class ChaseAvoidMovement(Movement):
+
+    OPTIONS = [TARGET_OPTION_STRING]
 
     def __init__(self, target):
         self.target = target

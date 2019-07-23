@@ -1,7 +1,7 @@
 import utils
-import scenario
 from player_control import PlayerControl, ControlScheme
-from robogun import RoboGun, GunInterface
+from robogun import GunInterface
+# from config_provider import FIELD_SIZE, TILE_SIZE
 
 # ==================================
 # Model
@@ -93,6 +93,10 @@ class DataRobot(BaseRobot):
     # Set-up functions:
     # =================
 
+    # the most important function!
+    def setup_movement(self, movement):
+        self.robot_control.setup_movement(movement)
+
     # optional flags
     def set_alert_flag(self, value=True):
         self.alert_flag = value
@@ -101,38 +105,35 @@ class DataRobot(BaseRobot):
         self.robot_control.set_resync_flag(value)
 
     # optional setups
-    def setup_gun(self, gun=None):
+    def setup_gun(self, gun):
         """Add a gun object to the robot unit.
         Setup gun access for AI-control and optional player control.
         """
-        if not gun:
-            gun = RoboGun()
-
+        # Gain control over new gun object.
         self.gun = gun
 
+        # Add interface for AI.
         gun_interface = GunInterface(gun)
         self.robot_control.setup_gun_interface(gun_interface)
 
+        # Add interface for player.
+        if self.player_control:
+            self.player_control.setup_gun(gun)
+
+        # Get started!
         self.enable_gun()
 
-        # TODO delete
-        # if self.player_control:
-        #     self.player_control.setup_gun(gun)
+    def setup_player_control(self, player_control):
+        """Add player control to the robot unit.
+        If robot unit owns a gun, add gun interface for player."""
 
-    def setup_player_control(self, player_control=None,
-                             control_scheme=None):
-        """Add player control to the robot unit."""
-
-        if not player_control:
-            if not control_scheme:
-                control_scheme = ControlScheme.default_scheme
-            player_control = PlayerControl(self, control_scheme)
         self.player_control = player_control
 
-        # TODO delete
-        # if self.gun:
-        #     self.player_control.setup_gun(self.gun)
+        # Add gun interface for player.
+        if self.gun:
+            self.player_control.setup_gun(self.gun)
 
+        # By adding player control, we immediately start with active player.
         self.hand_control_to_player()
 
     # Interface for AI_Control:
@@ -218,8 +219,10 @@ class DataRobot(BaseRobot):
         """Teleports the robot to a position in the corner
         with the largest distance from point.
         """
-        tile_size = scenario.TILE_SIZE
-        field_size = scenario.FIELD_SIZE
+        import config_provider
+
+        tile_size = config_provider.TILE_SIZE
+        field_size = config_provider.FIELD_SIZE
 
         lower_limit = tile_size + self.radius + 1
         upper_limit = field_size - tile_size - self.radius - 2

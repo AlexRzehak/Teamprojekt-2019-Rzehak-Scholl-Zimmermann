@@ -1,3 +1,4 @@
+import os
 import sys
 import math
 import time
@@ -8,14 +9,11 @@ from collections import defaultdict
 
 from PyQt5.QtCore import Qt, QPoint, QRectF, QTimer
 from PyQt5.QtGui import QPainter, QColor, QBrush, QPen, QPixmap
-from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow
+from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow, QMessageBox
 
-from Movement import FollowMovement, RandomTargetMovement, RunMovement, ChaseMovement, ChaseMovementGun, PermanentGunMovement, SimpleAvoidMovementGun, SimpleAvoidMovement, ChaseAvoidMovementGun
-from model import BaseRobot, DataRobot
-from ai_control import RobotControl, SensorData
-from player_control import PlayerControl, ControlScheme
-from robogun import RoboGun, GunInterface
-import scenario
+from ai_control import SensorData
+from player_control import ControlScheme
+import config_provider
 import utils
 
 # ==================================
@@ -46,8 +44,8 @@ import utils
 
 
 GAME_TITLE = 'SpaceBaseRobots'
-FIELD_SIZE = scenario.FIELD_SIZE
-TILE_SIZE = scenario.TILE_SIZE
+FIELD_SIZE = config_provider.FIELD_SIZE
+TILE_SIZE = config_provider.TILE_SIZE
 
 
 class Game(QMainWindow):
@@ -70,12 +68,19 @@ class Game(QMainWindow):
 
 class Board(QWidget):
     TILE_COUNT = int(FIELD_SIZE / TILE_SIZE)
-    SECONDS_PER_TICK = 0.05
+    SECONDS_PER_TICK = config_provider.SECONDS_PER_TICK
 
     def __init__(self, parent):
         super().__init__(parent)
 
-        self.obstacleArray = utils.create_example_array(Board.TILE_COUNT)
+        # TODO
+        config_reader = config_provider.ConfigReader()
+        config_reader.read_level('level1.txt')
+        self.obstacleArray = config_reader.create_level()
+
+        # self.robots = scenario.deploy_robots_from_config()
+
+        # self.obstacleArray = utils.create_example_array(Board.TILE_COUNT)
 
         # Create an additional obstacle list from array
         # storing the position values of every obstacle.
@@ -94,10 +99,14 @@ class Board(QWidget):
         # Data representations of bullets.
         self.bullets = set()
 
+        # Used by example extension.
         self.collision_scenarios = dict()
 
         # Initiate board state and game parameters.
-        self.create_scenario()
+        # samurai TODO
+        # self.create_scenario()
+        config_reader.read_robots()
+        self.robots = config_reader.create_robots()
 
         # Inititate key listener.
         self.key_states = dict()
@@ -113,15 +122,73 @@ class Board(QWidget):
         self.game_loop_barrier = threading.Barrier(2)
         self.init_game_loop()
 
+    # ==================================
+    # Set-Up and initiation
+    # ==================================
+
     def init_textures(self):
-        self.board_texture = QPixmap("textures/board.png")
-        self.wall_texture = QPixmap("textures/wall.png")
-        self.border_texture = QPixmap("textures/border.png")
-        self.hole_texture = QPixmap("textures/hole.png")
-        self.robot_texture = QPixmap("textures/robot.png")
-        self.bullet_texture = QPixmap("textures/bullet.png")
+        board_string = "textures/board.png"
+        wall_string = "textures/wall.png"
+        border_string = "textures/border.png"
+        hole_string = "textures/hole.png"
+        robot_string = "textures/robot.png"
+        bullet_string = "textures/bullet.png"
+
+        paths = (board_string, wall_string, border_string,
+                 hole_string, robot_string, bullet_string)
+
+        missing_no = [p for p in paths if not os.path.exists(p)]
+
+        if missing_no:
+            missing_str = ', '.join(missing_no)
+            d = QMessageBox()
+            d.setIcon(QMessageBox.Critical)
+            d.setText('Missing textures detected!')
+            d.setInformativeText(f'Texture(s) "{missing_str}" missing.')
+            d.setWindowTitle('WARNING: Missing textures!')
+            d.exec_()
+
+        self.board_texture = QPixmap(board_string)
+        self.wall_texture = QPixmap(wall_string)
+        self.border_texture = QPixmap(border_string)
+        self.hole_texture = QPixmap(hole_string)
+        self.robot_texture = QPixmap(robot_string)
+        self.bullet_texture = QPixmap(bullet_string)
+
+    def initiate_key_listening(self):
+        """Set up key listing by creating lists of keys to map.
+        Also map whether keys are stateless or require state information."""
+
+        collected_keys_states = defaultdict(list)
+        collected_keys_stateless = defaultdict(list)
+
+        # collect all key bindings from the robots
+        for robot in self.robots:
+            # no key bindings for this robot
+            if not robot.player_control:
+                continue
+
+            robot_keys = robot.player_control.control_scheme
+            for key, value in robot_keys.items():
+                if value in ControlScheme.STATELESS_KEYS:
+                    collected_keys_stateless[key].append(robot)
+                if value in ControlScheme.KEYS_WITH_STATE:
+                    collected_keys_states[key].append(robot)
+
+        # create key forwarding maps
+        for key, value in collected_keys_states.items():
+            self.key_states[key] = dict(is_pressed=False,
+                                        was_pressed=False,
+                                        targets=tuple(value))
+
+        for key, value in collected_keys_stateless.items():
+            self.stateless_keys[key] = tuple(value)
 
     def init_game_loop(self):
+        """Starts the game loop scheduler in another thread.
+        Scheduler leaves the event control in hands of Qt,
+        but will call the game loop in periodic intervalls.
+        """
 
         def game_loop_scheduler():
             # get local reference
@@ -161,16 +228,18 @@ class Board(QWidget):
     # ==================================
 
     def game_loop(self):
-        """The game's main loop."""
+        """The game's main loop.
+        It enacts key input, performs physics calculations
+        and sends and queries data from and to robot units."""
 
         # control part
-
+        # ------------
         self.time_stamp += 1
 
         self.handle_keys_with_state()
 
         # physics part
-
+        # ------------
         self.calculate_shoot_action()
 
         self.calculate_bullets()
@@ -182,7 +251,7 @@ class Board(QWidget):
         self.check_collision_robots()
 
         # message part
-
+        # ------------
         if self.time_stamp % 10 == 0:
             m = self.create_alert_message()
             for robot in self.robots:
@@ -195,253 +264,83 @@ class Board(QWidget):
             m = self.create_position_message(robot)
             robot.send_sensor_data(m)
 
-        # signal that calculations are done
+        # signal, that calculations are done
         self.game_loop_barrier.wait()
 
-    def create_scenario(self):
-        """Here, you can implement the scenario on the board.
-        """
+    # ==================================
+    # Key input Area
+    # ==================================
 
-        # First add the robots.
-        pos1 = (500, 750, 75, 0, 0)
-        mv1 = RunMovement()
-        robo1 = self.construct_robot(TILE_SIZE * 4, mv1, 20, 10, pos1,
-                                     max_life=5)
-        robo1.set_alert_flag()
-        self.deploy_robot(robo1)
+    def keyPressEvent(self, event):
+        key = event.key()
 
-        pos2 = (45, 845, 0, 0, 0)
-        mv2 = ChaseMovementGun(0)
-        gun = RoboGun()
-        RoboGun.trigun_decorator(gun)
-        robo2 = self.construct_robot(
-            TILE_SIZE * 3, mv2, 12, 10, pos2, gun=gun, max_life=1)
-        robo2.setup_player_control(
-            control_scheme=ControlScheme.player_two_scheme)
-        # robo2.set_alert_flag()
-        self.deploy_robot(robo2)
+        # handle stateless keys
+        if key in self.stateless_keys:
+            for robot in self.stateless_keys[key]:
+                robot.enter_key_action(key)
 
-        pos3 = (965, 35, 240, 0, 0)
-        mv3 = PermanentGunMovement()
-        robo3 = self.construct_robot(TILE_SIZE * 2.5, mv3, 5, 15, pos3,
-                                     v_max=12, v_alpha_max=30)
-        robo3.set_alert_flag()
-        pc = PlayerControl(robo3, ControlScheme.default_scheme,
-                           invasive_controls=True)
-        robo3.setup_player_control(pc)
-        self.deploy_robot(robo3)
+        # set state variables for keys with state
+        if key in self.key_states:
+            key_dict = self.key_states[key]
+            key_dict['is_pressed'] = True
+            key_dict['was_pressed'] = True
 
-        pos4 = (300, 650, 70, 0, 0)
-        mv4 = ChaseAvoidMovementGun(0)
-        gun4 = RoboGun(bullet_speed=30)
-        robo4 = self.construct_robot(
-            TILE_SIZE * 2, mv4, 15, 15, pos4, gun=gun4)
-        # robo4.set_alert_flag()
-        self.deploy_robot(robo4)
+    def keyReleaseEvent(self, event):
+        key = event.key()
 
-        # Then add scenario recipes.
-        # self.create_catch_recipe(0, [3, 1, 2])
+        # set state variables for keys with state
+        if key in self.key_states:
+            key_dict = self.key_states[key]
+            key_dict['is_pressed'] = False
 
-    def deploy_robot(self, data_robot):
-        self.robots.append(data_robot)
+    def handle_keys_with_state(self):
+        for key, value in self.key_states.items():
+            # state is acitve
+            if value['is_pressed'] or value['was_pressed']:
+                # TODO maybe only call when needed
+                value['was_pressed'] = False
+                for robot in value['targets']:
+                    robot.enter_key_action(key, state=True)
+            # state is inactive
+            else:
+                for robot in value['targets']:
+                    robot.enter_key_action(key, state=False)
 
-    def initiate_key_listening(self):
-        collected_keys_states = defaultdict(list)
-        collected_keys_stateless = defaultdict(list)
+        # perform actions for entwined keys
+        for robot in self.robots:
+            robot.finish_key_actions()
+
+    # ==================================
+    # Message Area
+    # ==================================
+    # ADD: You can add the creation of a new message type here!
+
+    def create_alert_message(self):
+        data = []
 
         for robot in self.robots:
-            if not robot.player_control:
-                continue
+            data.append((robot.x, robot.y))
 
-            robot_keys = robot.player_control.control_scheme
-            for key, value in robot_keys.items():
-                if value in ControlScheme.STATELESS_KEYS:
-                    collected_keys_stateless[key].append(robot)
-                if value in ControlScheme.KEYS_WITH_STATE:
-                    collected_keys_states[key].append(robot)
+        return SensorData(SensorData.ALERT_STRING, data, self.time_stamp)
 
-        for key, value in collected_keys_states.items():
-            self.key_states[key] = dict(is_pressed=False,
-                                        was_pressed=False,
-                                        targets=tuple(value))
+    def create_position_message(self, robot):
 
-        for key, value in collected_keys_stateless.items():
-            self.stateless_keys[key] = tuple(value)
+        data = (robot.x, robot.y, robot.alpha, robot.v, robot.v_alpha)
+        return SensorData(SensorData.POSITION_STRING, data, self.time_stamp)
 
-    def construct_robot(self, radius, movement_funct, a_max, a_alpha_max,
-                        position, fov_angle=90, v_max=50, v_alpha_max=90,
-                        max_life=3, respawn_timer=3, gun=None):
-        """
-        Create a new robot with given parameters.
-        You can add it to the board using deploy_robot().
-        """
+    def create_vision_message(self, robot):
+        "New message type for FoV-data of a robot."
 
-        # Create robot body with its set parameters.
-        base_robot = BaseRobot(radius, a_max, a_alpha_max, fov_angle=fov_angle,
-                               v_max=v_max, v_alpha_max=v_alpha_max,
-                               max_life=max_life, respawn_timer=respawn_timer)
+        # list of wall object tuples:
+        # ((xpos, ypos), type, distance)
+        board_data = self.calculate_vision_board(robot)
 
-        # Create autonomous robot unit.
-        thread_robot = RobotControl(base_robot, movement_funct)
+        # list of robot object tuples:
+        # ((xpos, ypos), distance)
+        robot_data = self.calculate_vision_robots(robot)
 
-        # Create data representation to be added to tracking of the server.
-        data_robot = DataRobot(base_robot, thread_robot)
-        # set up communication with thread robot about gun data
-        data_robot.setup_gun(gun)
-        # a position consists of (x, y, alpha, v, v_alpha) values
-        data_robot.place_robot(*position)
-
-        return data_robot
-
-    # ==================================
-    # Painter Area
-    # ==================================
-
-    def paintEvent(self, e):
-        qp = QPainter()
-        qp.begin(self)
-        self.drawBoard(qp)
-        self.drawObstacles(qp)
-        for robot in self.robots:
-            self.drawRobot(qp, robot)
-        self.drawBullets(qp)
-        qp.end()
-
-    def drawBoard(self, qp):
-        texture = self.board_texture
-        qp.save()
-        # TODO DO NOT HARD CODE
-        source = QRectF(0, 0, 1125, 1125)
-        target = QRectF(0, 0, 1000, 1000)
-        qp.setOpacity(1)
-        qp.drawPixmap(target, texture, source)
-        qp.restore()
-
-    def drawObstacles(self, qp):
-
-        for xpos in range(Board.TILE_COUNT):
-            for ypos in range(Board.TILE_COUNT):
-
-                tileVal = self.obstacleArray[xpos][ypos]
-
-                if tileVal == Hazard.Wall:
-                    texture = self.wall_texture
-                    qp.save()
-                    source = QRectF(0, 0, 10, 10)
-                    target = QRectF(xpos * TILE_SIZE, ypos *
-                                    TILE_SIZE, TILE_SIZE, TILE_SIZE)
-                    qp.drawPixmap(target, texture, source)
-                    qp.restore()
-
-                elif tileVal == Hazard.Border:
-                    texture = self.border_texture
-                    qp.save()
-                    source = QRectF(0, 0, 10, 10)
-                    target = QRectF(xpos * TILE_SIZE, ypos *
-                                    TILE_SIZE, TILE_SIZE, TILE_SIZE)
-                    qp.drawPixmap(target, texture, source)
-                    qp.restore()
-
-                elif tileVal == Hazard.Hole:
-                    texture = self.hole_texture
-                    qp.save()
-                    source = QRectF(0, 0, 10, 10)
-                    target = QRectF(xpos * TILE_SIZE, ypos *
-                                    TILE_SIZE, TILE_SIZE, TILE_SIZE)
-                    qp.drawPixmap(target, texture, source)
-                    qp.restore()
-
-    def drawRobot(self, qp, robot):
-        texture = self.robot_texture
-        overlay = QRectF(robot.x - robot.radius, robot.y -
-                         robot.radius, 2 * robot.radius, 2 * robot.radius)
-        qp.save()
-
-        if robot.life / robot.max_life == 0:
-            life_frac = 0.01
-        elif robot.life / robot.max_life >= 0:
-            life_frac = robot.life / robot.max_life
-        # setting opacity
-        robot_op = 1
-        overlay_op = 1
-        if robot.dead or robot.immune:
-            robot_op = 0.7
-            overlay_op = 1
-
-        # painting overlay:
-        # setting the color to represent health
-        if robot.immune:
-            R = 0
-            G = 0
-            B = 255
-            A = 100
-        elif not robot.dead:
-            R = 255 * (1 - life_frac)
-            G = 255 * life_frac
-            B = 0
-            A = 255
-        elif robot.dead:
-            R = 10
-            G = 10
-            B = 10
-            A = 255
-        qp.setBrush(QColor(R, G, B, A))
-        # drawing overlay
-        qp.setOpacity(overlay_op)
-        qp.drawEllipse(overlay)
-
-        # painting robot:
-        # mapping the texture to the robot
-        qp.translate(robot.x, robot.y)
-        qp.rotate(robot.alpha)
-        source = QRectF(0, 0, 567, 566)
-        target = QRectF(-robot.radius, -robot.radius,
-                        2 * robot.radius, 2 * robot.radius)
-        # drawing the robot
-        qp.setOpacity(robot_op)
-        qp.drawPixmap(target, texture, source)
-
-        qp.restore()
-
-    def drawBullets(self, qp):
-        texture = self.bullet_texture
-        for bullet in self.bullets:
-            bullet_radius = 10
-            qp.save()
-            qp.translate(bullet.position[0], bullet.position[1])
-            source = QRectF(0, 0, 715, 715)
-            target = QRectF(-bullet_radius, -bullet_radius,
-                            2*bullet_radius, 2 * bullet_radius)
-            qp.drawPixmap(target, texture, source)
-            qp.restore()
-
-    # ==================================
-    # Scenario Area
-    # ==================================
-
-    def create_catch_recipe(self, fugitive, hunters):
-        """Adds a new concrete scenario recipe.
-        If fugitive is caught, teleport catcher away.
-        """
-
-        # TODO make abstract with external callee
-
-        def callee(hunter, board):
-            fugitive_bot = board.robots[fugitive]
-            fugitive_pos = (fugitive_bot.x, fugitive_bot.y)
-            hunter_bot = board.robots[hunter]
-            Board.teleport_furthest_corner(fugitive_pos, hunter_bot)
-
-        for h in hunters:
-            f = partial(callee, h)
-            self.collision_scenarios[(fugitive, h)] = f
-
-    def perform_collision_scenario(self, col_tuple):
-        """Collision scenario handler.
-        Looks if a collision scenario occured and performs the actions needed.
-        """
-        if col_tuple in self.collision_scenarios:
-            self.collision_scenarios[col_tuple](self)
+        data = (board_data, robot_data)
+        return SensorData(SensorData.VISION_STRING, data, self.time_stamp)
 
     # ==================================
     # Vision Area
@@ -696,7 +595,7 @@ class Board(QWidget):
                     r2 = bot2.radius
                     check, _ = utils.overlap_check(c1, c2, r1, r2)
                     if check:
-                        self.perform_collision_scenario((i, j))
+                        self.handle_collision_event((i, j))
 
     # ==================================
     # Gun/Bullet Area
@@ -757,78 +656,154 @@ class Board(QWidget):
         return False
 
     # ==================================
-    # Key input Area
+    # Painter Area
     # ==================================
 
-    def keyPressEvent(self, event):
-        key = event.key()
-
-        # handle stateless keys
-        if key in self.stateless_keys:
-            for robot in self.stateless_keys[key]:
-                robot.enter_key_action(key)
-
-        # set state variables for keys with state
-        if key in self.key_states:
-            key_dict = self.key_states[key]
-            key_dict['is_pressed'] = True
-            key_dict['was_pressed'] = True
-
-    def keyReleaseEvent(self, event):
-        key = event.key()
-
-        # set state variables for keys with state
-        if key in self.key_states:
-            key_dict = self.key_states[key]
-            key_dict['is_pressed'] = False
-
-    def handle_keys_with_state(self):
-        for key, value in self.key_states.items():
-            # state is acitve
-            if value['is_pressed'] or value['was_pressed']:
-                # TODO maybe only call when needed
-                value['was_pressed'] = False
-                for robot in value['targets']:
-                    robot.enter_key_action(key, state=True)
-            # state is inactive
-            else:
-                for robot in value['targets']:
-                    robot.enter_key_action(key, state=False)
-
-        # perform actions for entwined keys
+    def paintEvent(self, e):
+        qp = QPainter()
+        qp.begin(self)
+        self.drawBoard(qp)
+        self.drawObstacles(qp)
         for robot in self.robots:
-            robot.finish_key_actions()
+            self.drawRobot(qp, robot)
+        self.drawBullets(qp)
+        qp.end()
+
+    def drawBoard(self, qp):
+        texture = self.board_texture
+        qp.save()
+        # TODO DO NOT HARD CODE
+        source = QRectF(0, 0, 1125, 1125)
+        target = QRectF(0, 0, 1000, 1000)
+        qp.setOpacity(1)
+        qp.drawPixmap(target, texture, source)
+        qp.restore()
+
+    def drawObstacles(self, qp):
+
+        for xpos in range(Board.TILE_COUNT):
+            for ypos in range(Board.TILE_COUNT):
+
+                tileVal = self.obstacleArray[xpos][ypos]
+
+                if tileVal == Hazard.Wall:
+                    texture = self.wall_texture
+                    qp.save()
+                    source = QRectF(0, 0, 10, 10)
+                    target = QRectF(xpos * TILE_SIZE, ypos *
+                                    TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                    qp.drawPixmap(target, texture, source)
+                    qp.restore()
+
+                elif tileVal == Hazard.Border:
+                    texture = self.border_texture
+                    qp.save()
+                    source = QRectF(0, 0, 10, 10)
+                    target = QRectF(xpos * TILE_SIZE, ypos *
+                                    TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                    qp.drawPixmap(target, texture, source)
+                    qp.restore()
+
+                elif tileVal == Hazard.Hole:
+                    texture = self.hole_texture
+                    qp.save()
+                    source = QRectF(0, 0, 10, 10)
+                    target = QRectF(xpos * TILE_SIZE, ypos *
+                                    TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                    qp.drawPixmap(target, texture, source)
+                    qp.restore()
+
+    def drawRobot(self, qp, robot):
+        texture = self.robot_texture
+        overlay = QRectF(robot.x - robot.radius, robot.y -
+                         robot.radius, 2 * robot.radius, 2 * robot.radius)
+        qp.save()
+
+        if robot.life / robot.max_life == 0:
+            life_frac = 0.01
+        elif robot.life / robot.max_life >= 0:
+            life_frac = robot.life / robot.max_life
+        # setting opacity
+        robot_op = 1
+        overlay_op = 1
+        if robot.dead or robot.immune:
+            robot_op = 0.7
+            overlay_op = 1
+
+        # painting overlay:
+        # setting the color to represent health
+        if robot.immune:
+            R = 0
+            G = 0
+            B = 255
+            A = 100
+        elif not robot.dead:
+            R = 255 * (1 - life_frac)
+            G = 255 * life_frac
+            B = 0
+            A = 255
+        elif robot.dead:
+            R = 10
+            G = 10
+            B = 10
+            A = 255
+        qp.setBrush(QColor(R, G, B, A))
+        # drawing overlay
+        qp.setOpacity(overlay_op)
+        qp.drawEllipse(overlay)
+
+        # painting robot:
+        # mapping the texture to the robot
+        qp.translate(robot.x, robot.y)
+        qp.rotate(robot.alpha)
+        source = QRectF(0, 0, 567, 566)
+        target = QRectF(-robot.radius, -robot.radius,
+                        2 * robot.radius, 2 * robot.radius)
+        # drawing the robot
+        qp.setOpacity(robot_op)
+        qp.drawPixmap(target, texture, source)
+
+        qp.restore()
+
+    def drawBullets(self, qp):
+        texture = self.bullet_texture
+        for bullet in self.bullets:
+            bullet_radius = 10
+            qp.save()
+            qp.translate(bullet.position[0], bullet.position[1])
+            source = QRectF(0, 0, 715, 715)
+            target = QRectF(-bullet_radius, -bullet_radius,
+                            2*bullet_radius, 2 * bullet_radius)
+            qp.drawPixmap(target, texture, source)
+            qp.restore()
 
     # ==================================
-    # Message Area
+    # Extensibility examples
     # ==================================
+    # Here, we created a small abstract event handler for robot collision.
+    # This example is a showcase for quick yet abstract extensibility.
 
-    def create_alert_message(self):
-        data = []
+    def add_catch_recipe(self, fugitive, hunters):
+        """Adds a new recipe type for collision events.
+        If fugitive is caught by any hunter, perform recipe action.
+        """
 
-        for robot in self.robots:
-            data.append((robot.x, robot.y))
+        def recipe_action(hunter, board):
+            fugitive_bot = board.robots[fugitive]
+            fugitive_pos = (fugitive_bot.x, fugitive_bot.y)
+            hunter_bot = board.robots[hunter]
+            Board.teleport_furthest_corner(fugitive_pos, hunter_bot)
 
-        return SensorData(SensorData.ALERT_STRING, data, self.time_stamp)
+        for h in hunters:
+            f = partial(recipe_action, h)
+            self.collision_scenarios[(fugitive, h)] = f
 
-    def create_position_message(self, robot):
-
-        data = (robot.x, robot.y, robot.alpha, robot.v, robot.v_alpha)
-        return SensorData(SensorData.POSITION_STRING, data, self.time_stamp)
-
-    def create_vision_message(self, robot):
-        "New message type for FoV-data of a robot."
-
-        # list of wall object tuples:
-        # ((xpos, ypos), type, distance)
-        board_data = self.calculate_vision_board(robot)
-
-        # list of robot object tuples:
-        # ((xpos, ypos), distance)
-        robot_data = self.calculate_vision_robots(robot)
-
-        data = (board_data, robot_data)
-        return SensorData(SensorData.VISION_STRING, data, self.time_stamp)
+    def handle_collision_event(self, col_tuple):
+        """Collision event handler.
+        Perform all given recipes for current collision event.
+        """
+        if col_tuple in self.collision_scenarios:
+            self.collision_scenarios[col_tuple](self)
 
     # ==================================
     # Static positioning methods

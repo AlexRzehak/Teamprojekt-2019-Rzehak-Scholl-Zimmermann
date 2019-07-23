@@ -65,10 +65,15 @@ class PlayerControl:
         # cooldown boolean to prevent accidental multiple actiavtions
         self.allow_toggle_autopilot = True
 
+        # Local copy nomes for state machine definitions
+        inact = PlayerControl.STATE_INACTIVE
+        push = PlayerControl.STATE_PUSH
+        act = PlayerControl.STATE_ACTIVE
+
         # State Machine for acc-rev_acc entwinement:
         # ==========================================
-        self.acc_state = PlayerControl.STATE_INACTIVE
-        self.acc_rev_state = PlayerControl.STATE_INACTIVE
+        self.acc_state = inact
+        self.acc_rev_state = inact
 
         def acc():
             self.a = self.accel_amt
@@ -82,20 +87,20 @@ class PlayerControl:
         def acc_pass():
             pass
 
-        self.acc_lookup = {(PlayerControl.STATE_INACTIVE, PlayerControl.STATE_INACTIVE): clear_acc,
-                           (PlayerControl.STATE_INACTIVE, PlayerControl.STATE_ACTIVE): rev_acc,
-                           (PlayerControl.STATE_INACTIVE, PlayerControl.STATE_PUSH): rev_acc,
-                           (PlayerControl.STATE_ACTIVE, PlayerControl.STATE_INACTIVE): acc,
-                           (PlayerControl.STATE_ACTIVE, PlayerControl.STATE_ACTIVE): acc_pass,
-                           (PlayerControl.STATE_ACTIVE, PlayerControl.STATE_PUSH): rev_acc,
-                           (PlayerControl.STATE_PUSH, PlayerControl.STATE_INACTIVE): acc,
-                           (PlayerControl.STATE_PUSH, PlayerControl.STATE_ACTIVE): acc,
-                           (PlayerControl.STATE_PUSH, PlayerControl.STATE_PUSH): acc}
+        self.acc_lookup = {(inact, inact): clear_acc,
+                           (inact, act): rev_acc,
+                           (inact, push): rev_acc,
+                           (act, inact): acc,
+                           (act, act): acc_pass,
+                           (act, push): rev_acc,
+                           (push, inact): acc,
+                           (push, act): acc,
+                           (push, push): acc}
 
         # State Machine for left-right entwinement:
         # =========================================
-        self.left_state = PlayerControl.STATE_INACTIVE
-        self.right_state = PlayerControl.STATE_INACTIVE
+        self.left_state = inact
+        self.right_state = inact
 
         def lr_left():
             if invasive_controls:
@@ -119,27 +124,26 @@ class PlayerControl:
         def lr_pass():
             pass
 
-        self.lr_lookup = {
-            (PlayerControl.STATE_INACTIVE, PlayerControl.STATE_INACTIVE): clear_lr,
-            (PlayerControl.STATE_INACTIVE, PlayerControl.STATE_ACTIVE): lr_right,
-            (PlayerControl.STATE_INACTIVE, PlayerControl.STATE_PUSH): lr_right,
-            (PlayerControl.STATE_ACTIVE, PlayerControl.STATE_INACTIVE): lr_left,
-            (PlayerControl.STATE_ACTIVE, PlayerControl.STATE_ACTIVE): lr_pass,
-            (PlayerControl.STATE_ACTIVE, PlayerControl.STATE_PUSH): lr_right,
-            (PlayerControl.STATE_PUSH, PlayerControl.STATE_INACTIVE): lr_left,
-            (PlayerControl.STATE_PUSH, PlayerControl.STATE_ACTIVE): lr_left,
-            (PlayerControl.STATE_PUSH, PlayerControl.STATE_PUSH): clear_lr}
+        self.lr_lookup = {(inact, inact): clear_lr,
+                          (inact, act): lr_right,
+                          (inact, push): lr_right,
+                          (act, inact): lr_left,
+                          (act, act): lr_pass,
+                          (act, push): lr_right,
+                          (push, inact): lr_left,
+                          (push, act): lr_left,
+                          (push, push): clear_lr}
 
     # communication interface with server:
     # ====================================
     def send_action_data(self):
         return self.a, self.a_alpha
 
-    # TODO delete
     # setup:
     # ======
-    # def setup_gun(self, gun):
-    #     self.gun = gun
+    def setup_gun(self, gun):
+        """Call this when changing or initiating the gun object."""
+        self.gun = gun
 
     # key input handler:
     # ==================
@@ -241,6 +245,8 @@ class ControlScheme:
 
     # default key bindings:
     # =====================
+    # ADD: Add a new key binding here!
+    # Don't forget to add it to the known bindings of the ConfigReader.
     default_scheme = {Qt.Key_W: ACC_STRING,
                       Qt.Key_S: ACC_REV_STRING,
                       Qt.Key_A: LEFT_STRING,

@@ -4,6 +4,7 @@ import threading
 from collections import deque
 
 from model import BaseRobot
+from Movement import Movement
 
 # ==================================
 # AI Control
@@ -31,7 +32,7 @@ class RobotControl(BaseRobot):
 
     MEM_SIZE = 10
 
-    def __init__(self, base_robot: BaseRobot, movement_funct):
+    def __init__(self, base_robot: BaseRobot, movement_funct=Movement):
 
         # You can access all body parameters of the robot over the interface.
         super().__init__(**vars(base_robot))
@@ -114,8 +115,8 @@ class RobotControl(BaseRobot):
 
         self.a, self.a_alpha = funct(signal.data, self)
 
-    # Communication control:
-    # ======================
+    # Data communication path to the server:
+    # ======================================
 
     def send_action_data(self):
         return self.a, self.a_alpha
@@ -126,7 +127,7 @@ class RobotControl(BaseRobot):
 
         self._sensor_queue.put(data)
 
-    # Right management interface for the Server:
+    # Control interface for the server:
     # ==========================================
 
     def clear_input(self):
@@ -138,11 +139,14 @@ class RobotControl(BaseRobot):
         self.a_alpha = 0
         self.destination = None
 
-    # Gun management interface for the AI:
-    # ====================================
+    def setup_movement(self, movement):
+        self.movement_funct = movement
 
     def setup_gun_interface(self, gun_interface):
         self.gun_interface = gun_interface
+
+    # Gun management interface for the AI:
+    # ====================================
 
     def is_reloading(self):
         """Return True if gun is reloading."""
