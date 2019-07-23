@@ -251,7 +251,8 @@ class ConfigReader:
         self.level_read_alert = False
 
     def read_level(self, level_name):
-        # TODO more circular imports
+        # this implementation expects hazard class in server module to
+        # have the same global constant.
         HAZARD_BORDER = 2
 
         ConfigReader.ensure_configs_folder()
@@ -303,7 +304,6 @@ class ConfigReader:
         if not os.path.exists(path):
             ConfigReader.create_robot_config(path)
 
-        # TODO senpai
         self.config.read(path)
 
         sect = self.config.sections()
@@ -545,7 +545,6 @@ class ConfigReader:
 
         return fallback_val
 
-    # TODO test fallback val
     def assemble_movement(self, section):
         """Parse movement string and movement options
         into movement class instance.
@@ -688,13 +687,19 @@ class Validators:
     def cast_only(_):
         return True
 
+
 # helper methods:
 # ===============
-
 
 def split_string_list(string: str):
     return tuple(s.strip() for s in string.strip().split(','))
 
 
 def ini_bool(string: str):
-    return configparser.ConfigParser.BOOLEAN_STATES[string.lower()]
+    string = string.lower()
+    boolean_states = configparser.ConfigParser.BOOLEAN_STATES
+
+    if string in boolean_states:
+        return boolean_states[string]
+
+    raise ValueError

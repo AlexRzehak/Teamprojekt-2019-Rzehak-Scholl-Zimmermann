@@ -1,12 +1,34 @@
 import random
 import math
 
+# ==================================
+# Movement
+# ==================================
+#
+# In this file, you will find the pre-defined movement AIs.
+# An AI implements responses to sensor data messages, reacting to data sent
+# by the server. The AI's main taks is to determine acceleration values,
+# that will be preccessed by the server, thus moving the robot.
+# The AIs have access to the RobotControl object and any tool provided by it.
+#
+# CHANGE HERE:
+# - ADD a new AI
+# - Change responses of existing AIs
+
+
+# Name of the target option for the config parser.
 TARGET_OPTION_STRING = 'target'
+
 
 class Movement:
     """Implement different movement responses."""
 
+    # Default movement does not need to receive alert messages.
+    # Movement AIs that want to receive alert messages override this.
     RECEIVE_ALERT = False
+    # Default movement has no additional construction parameters.
+    # Movements with additional constructor parameters add these parameters
+    # in their respective list in the right order for the config parser.
     OPTIONS = []
 
     def default(self, data, robot):
@@ -23,7 +45,8 @@ class Movement:
 
 
 class RandomMovement(Movement):
-    # sets a and alpha to random values
+    """Sets a and alpha to random values."""
+
     def position(self, data, robot):
 
         x, y, alpha, v, v_alpha = data
@@ -38,7 +61,9 @@ class RandomMovement(Movement):
 
 
 class NussschneckeMovement(Movement):
-    # accelerates to a certain speed while turning, then retains speed and turning speed
+    """Accelerates to a certain speed while turning,
+    then retains speed and turning speed."""
+
     def position(self, data, robot):
 
         x, y, alpha, v, v_alpha = data
@@ -54,7 +79,9 @@ class NussschneckeMovement(Movement):
 
 
 class SpiralMovement(Movement):
-    # accelerates to a certain speed while turning, then keeps accelerating while retaining turn speed
+    """Accelerates to a certain speed while turning,
+    then keeps accelerating while retaining turn speed."""
+
     def position(self, data, robot):
 
         x, y, alpha, v, v_alpha = data
@@ -70,7 +97,8 @@ class SpiralMovement(Movement):
 
 
 class SpinMovement(Movement):
-    # keeps accelerating to a set speed
+    """Keeps accelerating to a set speed."""
+
     def position(self, data, robot):
 
         x, y, alpha, v, v_alpha = data
@@ -84,7 +112,7 @@ class SpinMovement(Movement):
 
 
 class FollowMovement(Movement):
-    # follows a given Robot
+    """Follows a given robot."""
 
     RECEIVE_ALERT = True
     OPTIONS = [TARGET_OPTION_STRING]
@@ -127,9 +155,9 @@ class FollowMovement(Movement):
             destination_vector[0] ** 2 + destination_vector[1] ** 2)
 
         # calculating the value of the angle_change needed
-        destination_alpha_degree = calculate_destination_alpha(velocity_vector, destination_vector,
-                                                               velocity_vector_magnitude,
-                                                               destination_vector_magnitude)
+        destination_alpha_degree = calculate_destination_alpha(
+            velocity_vector, destination_vector, velocity_vector_magnitude,
+            destination_vector_magnitude)
 
         # determining direction and sign of turning angle
         direction = calculate_direction(velocity_vector, destination_vector)
@@ -146,7 +174,7 @@ class FollowMovement(Movement):
 
 
 class RandomTargetMovement(Movement):
-    # moves towards a random target, which is generated with every alert
+    """Moves towards a target, which is randomly generated with every alert."""
 
     RECEIVE_ALERT = True
 
@@ -185,9 +213,9 @@ class RandomTargetMovement(Movement):
             destination_vector[0] ** 2 + destination_vector[1] ** 2)
 
         # calculating the value of the angle_change needed
-        destination_alpha_degree = calculate_destination_alpha(velocity_vector, destination_vector,
-                                                               velocity_vector_magnitude,
-                                                               destination_vector_magnitude)
+        destination_alpha_degree = calculate_destination_alpha(
+            velocity_vector, destination_vector, velocity_vector_magnitude,
+            destination_vector_magnitude)
 
         # determining direction and sign of turning angle
         direction = calculate_direction(velocity_vector, destination_vector)
@@ -204,7 +232,8 @@ class RandomTargetMovement(Movement):
 
 
 class SimpleAvoidMovement(Movement):
-    # moves straight and avoids objects in the field of view
+    """Moves straight and avoids objects in the field of view."""
+
     def vision(self, data, robot):
         robot.destination = prime_object(data)
         return robot.a, robot.a_alpha
@@ -236,8 +265,8 @@ class SimpleAvoidMovement(Movement):
 
         # getting information about angle and direction
         turn_direction = calculate_direction(object_vector, velocity_vector)
-        delta_alpha = set_delta_alpha(obj_type, obj_distance,
-                                      threshold, obj_angle, turn_direction, v_alpha)
+        delta_alpha = set_delta_alpha(obj_type, obj_distance, threshold,
+                                      obj_angle, turn_direction, v_alpha)
 
         # setting a values for a and a_alpha
         a = set_acceleration(v, v_max)
@@ -248,7 +277,7 @@ class SimpleAvoidMovement(Movement):
 
 
 class RunMovement(Movement):
-    # turns away from closest robot or close objects
+    """Turns away from closest robot or close objects."""
 
     RECEIVE_ALERT = True
 
@@ -257,9 +286,6 @@ class RunMovement(Movement):
 
     def alert(self, data, robot):
         self.current_threat = prime_robot(data)
-        # TODO delete this
-        # TODO this WILL blow up!
-        # robot.threat = prime_robot(data)
         return robot.a, robot.a_alpha
 
     def vision(self, data, robot):
@@ -284,9 +310,9 @@ class RunMovement(Movement):
 
         # calculate robot data
         threat = self.current_threat
-        # TODO delete this
-        # TODO crash when no alert
-        # threat = robot.threat
+        if threat is None:
+            threat = robot.destination
+
         threat_coordinates = threat[0]
         threat_angle = calculate_angle_between_vectors(
             threat_coordinates, x, y, v, alpha)
@@ -304,8 +330,10 @@ class RunMovement(Movement):
         turn_direction = calculate_direction(object_vector, velocity_vector)
         threat_turn_direction = calculate_direction(
             threat_vector, velocity_vector)
-        delta_alpha = set_run_delta_alpha(obj_type, obj_distance, threshold, obj_angle, turn_direction,
-                                          v_alpha, threat_angle, threat_turn_direction,)
+        delta_alpha = set_run_delta_alpha(obj_type, obj_distance, threshold,
+                                          obj_angle, turn_direction,
+                                          v_alpha, threat_angle,
+                                          threat_turn_direction)
 
         # setting a values for a and a_alpha
         a = set_acceleration(v, v_max)
@@ -316,7 +344,7 @@ class RunMovement(Movement):
 
 
 class ChaseMovement(Movement):
-    # moves to given robot, searches if it is not in vision
+    """Moves to given robot, searches if it is not in vision."""
 
     OPTIONS = [TARGET_OPTION_STRING]
 
@@ -347,8 +375,8 @@ class ChaseMovement(Movement):
 
 
 class ChaseMovementGun(Movement):
-    # moves to given robot, searches if it is not in vision
-    # shoots if target is straight ahead
+    """Moves to given robot, searches if it is not in vision.
+    Shoots if target is straight ahead."""
 
     OPTIONS = [TARGET_OPTION_STRING]
 
@@ -378,8 +406,9 @@ class ChaseMovementGun(Movement):
 
 
 class SimpleAvoidMovementGun(Movement):
-    # moves straight and avoids objects in the field of view
-    # shoots if target is straight ahead
+    """Moves straight and avoids objects in the field of view.
+    Shoots if target is straight ahead."""
+
     def vision(self, data, robot):
         robot.destination = prime_object(data)
         return robot.a, robot.a_alpha
@@ -412,8 +441,8 @@ class SimpleAvoidMovementGun(Movement):
 
         # getting information about angle and direction
         turn_direction = calculate_direction(object_vector, velocity_vector)
-        delta_alpha = set_delta_alpha(obj_type, obj_distance,
-                                      threshold, obj_angle, turn_direction, v_alpha)
+        delta_alpha = set_delta_alpha(obj_type, obj_distance, threshold,
+                                      obj_angle, turn_direction, v_alpha)
 
         # setting a values for a and a_alpha
         a = set_acceleration(v, v_max)
@@ -428,15 +457,16 @@ class SimpleAvoidMovementGun(Movement):
 
 
 class PermanentGunMovement(RandomTargetMovement):
-    # shoots as much as possible, doesn't move
+    """Shoots as much as possible, while moving randomly."""
+
     def position(self, data, robot):
         robot.shoot()
         return super().position(data, robot)
 
 
 class ChaseAvoidMovement(Movement):
-    # moves to given robot, searches if it is not in vision
-    # avoids close objects
+    """Moves to given robot, searches if it is not in vision.
+    Avoids close objects."""
 
     OPTIONS = [TARGET_OPTION_STRING]
 
@@ -479,18 +509,20 @@ class ChaseAvoidMovement(Movement):
 
 
 class ChaseAvoidMovementGun(ChaseAvoidMovement):
-    # moves to given robot, searches if it is not in vision
-    # shoots if target is straight ahead, avoids close objects
+    """Moves to given robot, searches if it is not in vision.
+    Shoots if target is straight ahead, avoids close objects."""
+
     def position(self, data, robot):
         shoot_straight(robot, data)
         return super().position(data, robot)
 
+
 # ---------------
-# Help Functions
+# Helper Functions
 # ---------------
 
 def calculate_distance(a_x, a_y, b_x, b_y):
-    # calculates distance between points
+    """Calculates distance between points."""
     v_x = b_x - a_x
     v_y = b_y - a_y
     distance = math.sqrt(v_x ** 2 + v_y ** 2)
@@ -498,7 +530,7 @@ def calculate_distance(a_x, a_y, b_x, b_y):
 
 
 def calc_cross_product(B, P):
-    # calculates cross product
+    """Calculates cross product."""
     b_x = B[0]
     b_y = B[1]
     p_x = P[0]
@@ -509,7 +541,6 @@ def calc_cross_product(B, P):
 
 
 def calculate_vector(magnitude, angle):
-    # calculates a vector
     radian = (angle / 180 * math.pi)
     vector_x = (magnitude * math.sin(radian))
     vector_y = - (magnitude * math.cos(radian))
@@ -518,7 +549,7 @@ def calculate_vector(magnitude, angle):
 
 
 def calculate_vector_between_points(obj_position, x, y):
-    # calculates vector between 2 points
+    """Calculates vector between 2 points."""
     object_vector_x = obj_position[0] - x
     object_vector_y = obj_position[1] - y
     object_vector = (object_vector_x, object_vector_y)
@@ -526,21 +557,21 @@ def calculate_vector_between_points(obj_position, x, y):
 
 
 def calculate_angle_between_vectors(obj_position, x, y, v, alpha):
-    # calculates the angle between coordinates, represented as vectors
+    """Calculates the angle between coordinates, represented as vectors."""
     object_vector_x = obj_position[0] - x
     object_vector_y = obj_position[1] - y
-    object_vector_magnitude = math.sqrt(
+    object_vector_mag = math.sqrt(
         object_vector_x ** 2 + object_vector_y ** 2)
 
     velocity_vector = calculate_vector(v, alpha)
     velocity_vector_x = velocity_vector[0]
     velocity_vector_y = velocity_vector[1]
-    velocity_vector_magnitude = math.sqrt(
+    velocity_vector_mag = math.sqrt(
         velocity_vector_x ** 2 + velocity_vector_y ** 2)
 
     vector_multiplication = (velocity_vector_x * object_vector_x +
                              velocity_vector_y * object_vector_y)
-    magnitude_multiplication = velocity_vector_magnitude * object_vector_magnitude
+    magnitude_multiplication = velocity_vector_mag * object_vector_mag
     if magnitude_multiplication != 0:
         if vector_multiplication / magnitude_multiplication > 1:
             ratio = 1
@@ -560,7 +591,8 @@ def calculate_angle_between_vectors(obj_position, x, y, v, alpha):
 
 
 def calculate_direction(main_vector, second_vector):
-    # calculates in which relative direction the second vector points
+    """Calculates in which relative direction the second vector points."""
+
     cross_product = calc_cross_product(
         (main_vector[0], main_vector[1]),
         (second_vector[0], second_vector[1]))
@@ -575,7 +607,8 @@ def calculate_direction(main_vector, second_vector):
 
 
 def calculate_threshold(obj_type, v, alpha, v_alpha, v_max, robot):
-    # calculates the distance to an object at which the robot starts acting
+    """Calculate the distance to an object at which the robot starts acting."""
+
     if obj_type == "wall":
         delta_alpha = 90
         obj_size = 10
@@ -609,8 +642,11 @@ def calculate_destination_alpha(vec1, vec2, vec1_magnitude, vec2_magnitude):
 
 
 def set_object_info(robot):
-    # interprets destination to determine object type and distance
-    if robot.destination[1] == 1 or robot.destination[1] == 2 or robot.destination[1] == 3:
+    """Interprets destination to determine object type and distance."""
+    if (robot.destination[1] == 1 or
+        robot.destination[1] == 2 or
+            robot.destination[1] == 3):
+
         obj_type = "wall"
         obj_distance = robot.destination[2]
     else:
@@ -618,8 +654,11 @@ def set_object_info(robot):
         obj_distance = robot.destination[1]
     return obj_type, obj_distance
 
-def set_delta_alpha(obj_type, distance, threshold, obj_angle, turn_direction, v_alpha):
-    # set delta_alpha based on obstacle type and distance
+
+def set_delta_alpha(obj_type, distance, threshold,
+                    obj_angle, turn_direction, v_alpha):
+    """Set delta_alpha based on obstacle type and distance."""
+
     absolute_delta_alpha = 10
     if obj_type == "wall":
         if distance <= threshold and turn_direction == "right":
@@ -638,9 +677,11 @@ def set_delta_alpha(obj_type, distance, threshold, obj_angle, turn_direction, v_
     return delta_alpha
 
 
-def set_run_delta_alpha(obj_type, distance, threshold, obj_angle, turn_direction, v_alpha,
+def set_run_delta_alpha(obj_type, distance, threshold, obj_angle,
+                        turn_direction, v_alpha,
                         threat_angle, threat_turn_direction):
-    # set delta_alpha based on obstacle and threat
+    """Set delta_alpha based on obstacle and threat."""
+
     absolute_delta_alpha = 20
     if obj_type == "wall":
         if distance <= threshold and turn_direction == "right":
@@ -671,7 +712,8 @@ def set_run_delta_alpha(obj_type, distance, threshold, obj_angle, turn_direction
 
 
 def set_angle_sign(angle, direction):
-    # gives a sign to the angle based on turning direction
+    """Gives a sign to the angle based on turning direction."""
+
     if direction == "right":
         signed_angle = angle
     elif direction == "left":
@@ -682,7 +724,8 @@ def set_angle_sign(angle, direction):
 
 
 def set_angle_acceleration(direction, delta_alpha, v_alpha, robot):
-    # setting a_alpha values
+    """Setting a_alpha values."""
+
     a_alpha_max = robot.a_alpha_max
     if direction == "right":
         if delta_alpha >= a_alpha_max + v_alpha:
@@ -703,23 +746,26 @@ def set_angle_acceleration(direction, delta_alpha, v_alpha, robot):
 
 
 def set_acceleration(velocity, v_max):
-    # setting a to accelerate to a speed of v_max
+    """Setting a to accelerate to a speed of v_max."""
+
     if velocity < v_max:
         a = 1
     else:
         a = 0
     return a
 
+
 def search(array_tuple, pos):
-    # takes robot out of array of robots
-    # returns false if the robot is not in the robot array
+    """Takes robot out of array of robots.
+    Returns false if the robot is not in the robot array."""
     robot_array = array_tuple[1]
     found_bot = robot_array[pos]
     return found_bot
 
 
 def prime_object(array_tuple):
-    # identifies the most significant object of an object array
+    """Identifies the most significant object of an object array."""
+
     robot_array = array_tuple[1]
     obstacle_array = array_tuple[0]
     significance = math.inf
@@ -747,7 +793,8 @@ def prime_object(array_tuple):
 
 
 def prime_robot(array):
-    # identifies the most significant robot of a robot array
+    """Identifies the most significant robot of a robot array."""
+
     distance_array = []
     robot_x = array[0][0]
     robot_y = array[0][1]
@@ -765,9 +812,10 @@ def prime_robot(array):
     return significant_robot
 
 
-def print_info(boolean, velocity_vector, object_vector, threshold, turn_direction, delta_alpha, a, a_alpha,
+def print_info(boolean, velocity_vector, object_vector, threshold,
+               turn_direction, delta_alpha, a, a_alpha,
                obj_distance, obj_angle, robot):
-    # prints a bunch of data
+
     if boolean:
         print("Object: " + str(robot.destination))
         print("Vv: " + str(velocity_vector))
@@ -783,8 +831,9 @@ def print_info(boolean, velocity_vector, object_vector, threshold, turn_directio
 
 
 def position_destination_robot(self, data, robot):
-    # sets acceleration and angle_acceleration to move towards a robot
-    # that is stored in destination
+    """Sets acceleration and angle_acceleration to move towards a robot,
+    that is stored in destination."""
+
     x, y, alpha, v, v_alpha = data
 
     # setting the robots destination
@@ -809,8 +858,9 @@ def position_destination_robot(self, data, robot):
         destination_vector[0] ** 2 + destination_vector[1] ** 2)
 
     # calculating the value of the angle_change needed
-    destination_alpha_degree = calculate_destination_alpha(velocity_vector, destination_vector,
-                                                           velocity_vector_magnitude, destination_vector_magnitude)
+    destination_alpha_degree = calculate_destination_alpha(
+        velocity_vector, destination_vector, velocity_vector_magnitude,
+        destination_vector_magnitude)
 
     # determining direction and sign of turning angle
     direction = calculate_direction(velocity_vector, destination_vector)
@@ -824,10 +874,13 @@ def position_destination_robot(self, data, robot):
 
     return a, a_alpha
 
-# Shooting behaviours
-# -------------------
+
+# Shooting behaviours:
+# ====================
+
 def shoot_straight(robot, data):
-    # enqueues a shot if aim is crosses target robot
+    """Enqueues a shot if aim is crosses target robot."""
+
     x, y, alpha, v, v_alpha = data
     if type(robot.destination) == tuple:
         coordinates = robot.destination[0]
@@ -844,7 +897,8 @@ def shoot_straight(robot, data):
 
 
 def calculate_inaccuracy(position, coordinates, alpha, vel):
-    # calculates inaccuracy of given position, angle and target coordinates
+    """Calculates inaccuracy of position, angle and target coordinates."""
+
     x = position[0]
     y = position[1]
     c_x = coordinates[0]

@@ -1,7 +1,6 @@
 import utils
 from player_control import PlayerControl, ControlScheme
 from robogun import GunInterface
-# from config_provider import FIELD_SIZE, TILE_SIZE
 
 # ==================================
 # Model
@@ -219,10 +218,9 @@ class DataRobot(BaseRobot):
         """Teleports the robot to a position in the corner
         with the largest distance from point.
         """
-        import config_provider
-
-        tile_size = config_provider.TILE_SIZE
-        field_size = config_provider.FIELD_SIZE
+        # global constants: please mind that these should not be redefined.
+        tile_size = 10
+        field_size = 1000
 
         lower_limit = tile_size + self.radius + 1
         upper_limit = field_size - tile_size - self.radius - 2

@@ -637,9 +637,8 @@ class Board(QWidget):
     def drawBoard(self, qp):
         texture = self.board_texture
         qp.save()
-        # TODO DO NOT HARD CODE
         source = QRectF(0, 0, 1125, 1125)
-        target = QRectF(0, 0, 1000, 1000)
+        target = QRectF(0, 0, FIELD_SIZE, FIELD_SIZE)
         qp.setOpacity(1)
         qp.drawPixmap(target, texture, source)
         qp.restore()
