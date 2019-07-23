@@ -86,7 +86,8 @@ class Board(QWidget):
         self.obstacleArray = config_reader.create_level()
         self.obstacle_list = utils.generate_obstacle_list(
             self.obstacleArray, Board.TILE_COUNT)
-        self.rectangles = utils.group_tiles_into_rectangles(self.obstacleArray)
+        self.rectangles = utils.group_tiles_into_rectangles(
+            self.obstacleArray, Board.TILE_COUNT, TILE_SIZE)
 
         # Finally read robot config and create robots
         config_reader.read_robots()
@@ -124,8 +125,6 @@ class Board(QWidget):
         hole_string = "textures/hole.png"
         robot_string = "textures/robot.png"
         bullet_string = "textures/bullet.png"
-        up_booster_string = "textures/up_booster.png"
-        down_booster_string = "textures/down_booster.png"
 
         paths = (board_string, wall_string, border_string,
                  hole_string, robot_string, bullet_string)
@@ -147,8 +146,6 @@ class Board(QWidget):
         self.hole_texture = QPixmap(hole_string)
         self.robot_texture = QPixmap(robot_string)
         self.bullet_texture = QPixmap(bullet_string)
-        self.up_booster_texture = QPixmap(up_booster_string)
-        self.down_booster_texture = QPixmap(down_booster_string)
 
     def initiate_key_listening(self):
         """Set up key listing by creating lists of keys to map.
@@ -292,7 +289,7 @@ class Board(QWidget):
         for key, value in self.key_states.items():
             # state is acitve
             if value['is_pressed'] or value['was_pressed']:
-                # TODO maybe only call when needed
+                # Reset for check between this tick and next tick.
                 value['was_pressed'] = False
                 for robot in value['targets']:
                     robot.enter_key_action(key, state=True)
@@ -505,16 +502,10 @@ class Board(QWidget):
                 min_dy = dy
                 final_tile_type = tile_type
 
+        # Check special actions for special tile types:
+        # ADD: If you add a new tile type, add its interaction here.
         if final_tile_type == Hazard.Hole:
             robot.deal_damage(1000)
-
-        if final_tile_type == Hazard.BoostUp:
-            if max_dy < 0:
-                min_dy = abs(max_dy) * -2
-
-        if final_tile_type == Hazard.BoostDown:
-            if max_dy > 0:
-                min_dy = abs(max_dy) * 2
 
         return min_dx, min_dy, v, v_alpha
 
@@ -531,13 +522,15 @@ class Board(QWidget):
 
             if not x_collided:
                 dx += dx_step
-                robot_center = QPointF(dx + robot.x, dy + robot.y - 1 * dy_step)
+                robot_center = QPointF(
+                    dx + robot.x, dy + robot.y - 1 * dy_step)
                 x_collided = utils.check_collision_circle_rect(
                     robot_center, robot.radius, tile_origin, rect[2], rect[3])
 
             if not y_collided:
                 dy += dy_step
-                robot_center = QPointF(dx + robot.x - 1 * dx_step, dy + robot.y)
+                robot_center = QPointF(
+                    dx + robot.x - 1 * dx_step, dy + robot.y)
                 y_collided = utils.check_collision_circle_rect(
                     robot_center, robot.radius, tile_origin, rect[2], rect[3])
 
@@ -610,7 +603,8 @@ class Board(QWidget):
         return False
 
     def col_bullet_walls(self, bullet):
-        can_pass = {Hazard.Empty, Hazard.BoostUp, Hazard.BoostDown}
+        # Set of tiles that are passable by bullets.
+        can_pass = {Hazard.Empty}
 
         position = bullet.position
 
@@ -677,24 +671,6 @@ class Board(QWidget):
 
                 elif tileVal == Hazard.Hole:
                     texture = self.hole_texture
-                    qp.save()
-                    source = QRectF(0, 0, 10, 10)
-                    target = QRectF(xpos * TILE_SIZE, ypos *
-                                    TILE_SIZE, TILE_SIZE, TILE_SIZE)
-                    qp.drawPixmap(target, texture, source)
-                    qp.restore()
-
-                elif tileVal == Hazard.BoostUp:
-                    texture = self.up_booster_texture
-                    qp.save()
-                    source = QRectF(0, 0, 10, 10)
-                    target = QRectF(xpos * TILE_SIZE, ypos *
-                                    TILE_SIZE, TILE_SIZE, TILE_SIZE)
-                    qp.drawPixmap(target, texture, source)
-                    qp.restore()
-
-                elif tileVal == Hazard.BoostDown:
-                    texture = self.down_booster_texture
                     qp.save()
                     source = QRectF(0, 0, 10, 10)
                     target = QRectF(xpos * TILE_SIZE, ypos *
@@ -845,8 +821,6 @@ class Hazard:
     Wall = 1
     Border = 2
     Hole = 3
-    BoostUp = 8
-    BoostDown = 9
 
 
 if __name__ == '__main__':

@@ -14,6 +14,8 @@ from PyQt5.QtCore import QPointF
 # mostly mathematicl geometry helper functions.
 
 
+# Helper functions for alternative representations of obstacle lists:
+# ===================================================================
 def generate_obstacle_list(matrix, size):
     """
     Take a matrix of a given size
@@ -28,19 +30,17 @@ def generate_obstacle_list(matrix, size):
     return np.array(out)
 
 
-def group_tiles_into_rectangles(tile_array):
-    TILE_COUNT = 100
-    TILE_SIZE = 10
+def group_tiles_into_rectangles(tile_array, tile_count, tile_size):
 
     rects = []
-    in_rects = [[False] * TILE_COUNT for _ in range(TILE_COUNT)]
-    for tile_x in range(TILE_COUNT):
-        for tile_y in range(TILE_COUNT):
+    in_rects = [[False] * tile_count for _ in range(tile_count)]
+    for tile_x in range(tile_count):
+        for tile_y in range(tile_count):
             tile_type = tile_array[tile_x][tile_y]
             last_x = tile_x
             last_y = tile_y
             if tile_type and not in_rects[tile_x][tile_y]:
-                for neighbour_x in range(tile_x + 1, TILE_COUNT):
+                for neighbour_x in range(tile_x + 1, tile_count):
                     if tile_type == tile_array[neighbour_x][tile_y]:
                         last_x = neighbour_x
                         in_rects[neighbour_x][tile_y] = True
@@ -48,7 +48,7 @@ def group_tiles_into_rectangles(tile_array):
                     else:
                         break
             if tile_type and not in_rects[tile_x][tile_y]:
-                for neighbour_y in range(tile_y + 1, TILE_COUNT):
+                for neighbour_y in range(tile_y + 1, tile_count):
                     if tile_type == tile_array[tile_x][neighbour_y]:
                         last_y = neighbour_y
                         in_rects[tile_x][neighbour_y] = True
@@ -56,22 +56,46 @@ def group_tiles_into_rectangles(tile_array):
                     else:
                         break
             if tile_type:
-                rect_x = tile_x * TILE_SIZE
-                rect_y = tile_y * TILE_SIZE
-                row_len = (last_x - tile_x) * TILE_SIZE + TILE_SIZE
-                col_len = (last_y - tile_y) * TILE_SIZE + TILE_SIZE
+                rect_x = tile_x * tile_size
+                rect_y = tile_y * tile_size
+                row_len = (last_x - tile_x) * tile_size + tile_size
+                col_len = (last_y - tile_y) * tile_size + tile_size
                 if not tile_x == last_x:
                     rects.append(
-                        (rect_x, rect_y, row_len, TILE_SIZE, tile_type))
+                        (rect_x, rect_y, row_len, tile_size, tile_type))
                 if not tile_y == last_y:
                     rects.append(
-                        (rect_x, rect_y, TILE_SIZE, col_len, tile_type))
+                        (rect_x, rect_y, tile_size, col_len, tile_type))
                 if not in_rects[tile_x][tile_y]:
                     rects.append(
-                        (rect_x, rect_y, TILE_SIZE, TILE_SIZE, tile_type))
+                        (rect_x, rect_y, tile_size, tile_size, tile_type))
     return rects
 
 
+def create_example_array(size: int):
+    """Creates an example field."""
+
+    array = [[0] * size for row in range(size)]
+
+    # setting the sidewalls by setting all the first and last Elements
+    # of each row and column to 1
+    for x in range(size):
+        array[x][0] = 2
+        array[x][size - 1] = 2
+        array[0][x] = 2
+        array[size - 1][x] = 2
+
+    # individual Wall tiles:
+    for i in range(int(size / 4), int(size / 2)):
+        array[i][int(size/2)] = 1
+        array[int(size/3)][i] = 1
+        array[int(size / 4 * 3)][i] = 1
+
+    return array
+
+
+# vision helpher functions:
+# =========================
 def calculate_angles(point_list, point, angle, fov_angle):
     """
     Numpy method for angle-based check if an coordinate is seen by
@@ -177,6 +201,8 @@ def ray_check(point, ray_vector, circle):
     return t >= 0
 
 
+# geometric helper functions:
+# ===========================
 def distance(a, b):
     """Simple function to calculate the euclidian distance between to points.
     """
@@ -204,10 +230,12 @@ def check_collision_circle_rect(circle_center, circle_radius,
                                 rect_origin, rect_width, rect_height):
 
     # calc the closest point in the rectangle to the robot
-    closest_point = QPointF(limit(circle_center.x(), rect_origin.x(), rect_origin.x() + rect_width - 1),
-                            limit(circle_center.y(), rect_origin.y(), rect_origin.y() + rect_height - 1))
+    closest_point = QPointF(limit(circle_center.x(), rect_origin.x(),
+                                  rect_origin.x() + rect_width - 1),
+                            limit(circle_center.y(), rect_origin.y(),
+                                  rect_origin.y() + rect_height - 1))
 
-    # calc the x and y distance from the closest point to the center of the robo
+    # get distances on x-axis and y-axis
     dx = abs(closest_point.x() - circle_center.x())
     dy = abs(closest_point.y() - circle_center.y())
 
@@ -230,6 +258,8 @@ def vector_from_angle(angle):
     return np.array(v)
 
 
+# mathematical helpher functions:
+# ===============================
 def limit(value, min_limit, max_limit):
     if value > max_limit:
         return max_limit
@@ -239,7 +269,10 @@ def limit(value, min_limit, max_limit):
         return value
 
 
+# event management helper functions:
+# ==================================
 def execute_after(secs: float, func):
+    """Execute func after given amount of seconds in another thread."""
     def wait_and_call(secs, func):
         time.sleep(secs)
         func()
@@ -247,29 +280,3 @@ def execute_after(secs: float, func):
     t = threading.Thread(target=wait_and_call, args=(secs, func))
     t.daemon = True
     t.start()
-
-
-def create_example_array(size: int):
-
-    array = [[0] * size for row in range(size)]
-
-    # setting the sidewalls by setting all the first and last Elements
-    # of each row and column to 1
-    for x in range(size):
-        array[x][0] = 2
-        array[x][size - 1] = 2
-        array[0][x] = 2
-        array[size - 1][x] = 2
-
-    # individual Wall tiles:
-    for i in range(int(size / 4), int(size / 2)):
-        array[i][int(size/2)] = 1
-        array[int(size/3)][i] = 1
-        array[int(size / 4 * 3) - 10][i] = 1
-
-    for i in range(30, 45, 3):
-        for j in range(7):
-            array[15 + j][i] = 8
-            array[75 + j][i] = 9
-
-    return array
