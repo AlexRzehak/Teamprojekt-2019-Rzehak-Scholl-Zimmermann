@@ -221,6 +221,11 @@ def create_example_array(size: int):
     for i in range(int(size / 4), int(size / 2)):
         array[i][int(size/2)] = 1
         array[int(size/3)][i] = 1
-        array[int(size / 4 * 3)][i] = 1
+        array[int(size / 4 * 3) - 10][i] = 1
+
+    for i in range(30, 45, 3):
+        for j in range(7):
+            array[15 + j][i] = 8
+            array[75 + j][i] = 9
 
     return array

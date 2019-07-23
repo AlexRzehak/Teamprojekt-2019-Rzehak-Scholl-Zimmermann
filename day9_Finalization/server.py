@@ -124,6 +124,8 @@ class Board(QWidget):
         hole_string = "textures/hole.png"
         robot_string = "textures/robot.png"
         bullet_string = "textures/bullet.png"
+        up_booster_string = "textures/up_booster.png"
+        down_booster_string = "textures/down_booster.png"
 
         paths = (board_string, wall_string, border_string,
                  hole_string, robot_string, bullet_string)
@@ -145,6 +147,8 @@ class Board(QWidget):
         self.hole_texture = QPixmap(hole_string)
         self.robot_texture = QPixmap(robot_string)
         self.bullet_texture = QPixmap(bullet_string)
+        self.up_booster_texture = QPixmap(up_booster_string)
+        self.down_booster_texture = QPixmap(down_booster_string)
 
     def initiate_key_listening(self):
         """Set up key listing by creating lists of keys to map.
@@ -446,27 +450,26 @@ class Board(QWidget):
     #       2. fix this and make it pretty
     def group_tiles_into_rectangles(self, tiles_array):
         rects = []
-        in_row = [[False] * 100 for _ in range(100)]
-        in_col = [[False] * 100 for _ in range(100)]
-        for tile_x in range(100):
-            for tile_y in range(100):
+        in_rects = [[False] * Board.TILE_COUNT for _ in range(Board.TILE_COUNT)]
+        for tile_x in range(Board.TILE_COUNT):
+            for tile_y in range(Board.TILE_COUNT):
                 tile_type = self.obstacleArray[tile_x][tile_y]
                 last_x = tile_x
                 last_y = tile_y
-                if tile_type and not in_row[tile_x][tile_y]:
-                    for x in range(100):
-                        neighbour_x = utils.limit(tile_x + x, 0, 99)
+                if tile_type and not in_rects[tile_x][tile_y]:
+                    for neighbour_x in range(tile_x + 1, Board.TILE_COUNT):
                         if tile_type == self.obstacleArray[neighbour_x][tile_y]:
                             last_x = neighbour_x
-                            in_row[neighbour_x][tile_y] = True
+                            in_rects[neighbour_x][tile_y] = True
+                            in_rects[tile_x][tile_y] = True
                         else:
                             break
-                if tile_type and not in_col[tile_x][tile_y]:
-                    for y in range(100):
-                        neighbour_y = utils.limit(tile_y + y, 0, 99)
+                if tile_type and not in_rects[tile_x][tile_y]:
+                    for neighbour_y in range(tile_y + 1, Board.TILE_COUNT):
                         if tile_type == self.obstacleArray[tile_x][neighbour_y]:
                             last_y = neighbour_y
-                            in_col[tile_x][neighbour_y] = True
+                            in_rects[tile_x][neighbour_y] = True
+                            in_rects[tile_x][tile_y] = True
                         else:
                             break
                 if tile_type:
@@ -475,15 +478,21 @@ class Board(QWidget):
                     row_len = (last_x - tile_x) * TILE_SIZE + TILE_SIZE
                     col_len = (last_y - tile_y) * TILE_SIZE + TILE_SIZE
                     if not tile_x == last_x:
-                        rects.append((rect_x, rect_y, row_len, 10, tile_type))
+                        rects.append((rect_x, rect_y, row_len, TILE_SIZE, tile_type))
                     if not tile_y == last_y:
-                        rects.append((rect_x, rect_y, 10, col_len, tile_type))
+                        rects.append((rect_x, rect_y, TILE_SIZE, col_len, tile_type))
+                    if not in_rects[tile_x][tile_y]:
+                        rects.append((rect_x, rect_y, TILE_SIZE, TILE_SIZE, tile_type))
         return rects
 
     def calculate_robot(self, poll, robot):
         """Uses current position data of robot robot and acceleration values
         polled from the robot to calculate new position values.
         """
+
+        # robot won't move while dead
+        if robot.dead:
+            return
 
         # unpack robot output
         a, a_alpha = poll
@@ -513,10 +522,8 @@ class Board(QWidget):
         new_position_col = (robot.x + dx_col, robot.y + dy_col,
                             alpha, v_col, new_v_alpha)
 
-        # re-place the robot on the board
+        # finally, re-place the robot on the board
         Board.place_robot(robot, *new_position_col)
-        # sends tuple to be used as "sensor_data"
-        return new_position_col
 
     def col_robots_walls(self, robot, max_dx, max_dy, v, v_alpha):
         """Task 2: Here the collision with obstacles is calculated."""
@@ -537,10 +544,16 @@ class Board(QWidget):
                 min_dy = dy
                 final_tile_type = tile_type
 
-        if final_tile_type == 3:
+        if final_tile_type == Hazard.Hole:
             robot.deal_damage(1000)
-            v = 0
-            v_alpha = 0
+
+        if final_tile_type == Hazard.BoostUp:
+            if max_dy < 0:
+                min_dy = abs(max_dy) * -2
+
+        if final_tile_type == Hazard.BoostDown:
+            if max_dy > 0:
+                min_dy = abs(max_dy) * 2
 
         return min_dx, min_dy, v, v_alpha
 
@@ -557,15 +570,13 @@ class Board(QWidget):
 
             if not x_collided:
                 dx += dx_step
-                robot_center = QPointF(
-                    dx + robot.x, dy + robot.y - 1 * dy_step)
+                robot_center = QPointF(dx + robot.x, dy + robot.y - 1 * dy_step)
                 x_collided = utils.check_collision_circle_rect(
                     robot_center, robot.radius, tile_origin, rect[2], rect[3])
 
             if not y_collided:
                 dy += dy_step
-                robot_center = QPointF(
-                    dx + robot.x - 1 * dx_step, dy + robot.y)
+                robot_center = QPointF(dx + robot.x - 1 * dx_step, dy + robot.y)
                 y_collided = utils.check_collision_circle_rect(
                     robot_center, robot.radius, tile_origin, rect[2], rect[3])
 
@@ -639,6 +650,8 @@ class Board(QWidget):
         return False
 
     def col_bullet_walls(self, bullet):
+        can_pass = {Hazard.Empty, Hazard.BoostUp, Hazard.BoostDown}
+
         position = bullet.position
 
         tile_x = int(position[0] / TILE_SIZE)
@@ -647,7 +660,7 @@ class Board(QWidget):
         tile_y = int(position[1] / TILE_SIZE)
         tile_y = utils.limit(tile_y, 0, Board.TILE_COUNT - 1)
 
-        if self.obstacleArray[tile_x][tile_y] != 0:
+        if self.obstacleArray[tile_x][tile_y] not in can_pass:
             self.bullets.remove(bullet)
             return True
 
@@ -704,6 +717,24 @@ class Board(QWidget):
 
                 elif tileVal == Hazard.Hole:
                     texture = self.hole_texture
+                    qp.save()
+                    source = QRectF(0, 0, 10, 10)
+                    target = QRectF(xpos * TILE_SIZE, ypos *
+                                    TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                    qp.drawPixmap(target, texture, source)
+                    qp.restore()
+
+                elif tileVal == Hazard.BoostUp:
+                    texture = self.up_booster_texture
+                    qp.save()
+                    source = QRectF(0, 0, 10, 10)
+                    target = QRectF(xpos * TILE_SIZE, ypos *
+                                    TILE_SIZE, TILE_SIZE, TILE_SIZE)
+                    qp.drawPixmap(target, texture, source)
+                    qp.restore()
+
+                elif tileVal == Hazard.BoostDown:
+                    texture = self.down_booster_texture
                     qp.save()
                     source = QRectF(0, 0, 10, 10)
                     target = QRectF(xpos * TILE_SIZE, ypos *
@@ -854,6 +885,8 @@ class Hazard:
     Wall = 1
     Border = 2
     Hole = 3
+    BoostUp = 8
+    BoostDown = 9
 
 
 if __name__ == '__main__':
