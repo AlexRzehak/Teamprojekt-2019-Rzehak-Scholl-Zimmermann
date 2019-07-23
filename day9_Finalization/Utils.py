@@ -5,6 +5,14 @@ import threading
 
 from PyQt5.QtCore import QPointF
 
+# ==================================
+# Utils
+# ==================================
+#
+# In this file, you will find some functions that are
+# useful in different cases throughout the project,
+# mostly mathematicl geometry helper functions.
+
 
 def generate_obstacle_list(matrix, size):
     """

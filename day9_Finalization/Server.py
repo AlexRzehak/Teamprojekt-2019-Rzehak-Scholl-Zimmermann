@@ -1,3 +1,4 @@
+import os
 import sys
 import math
 import time
@@ -8,14 +9,43 @@ from collections import defaultdict
 
 from PyQt5.QtCore import Qt, QPointF, QRectF, QTimer
 from PyQt5.QtGui import QPainter, QColor, QBrush, QPen, QPixmap
-from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow
+from PyQt5.QtWidgets import QWidget, QApplication, QMainWindow, QMessageBox
 
-from Movement import FollowMovement, RandomTargetMovement, RunMovement, ChaseMovement, ChaseMovementGun, PermanentGunMovement, SimpleAvoidMovementGun, SimpleAvoidMovement, ChaseAvoidMovementGun
-from Robot import BaseRobot, ThreadRobot, SensorData, RoboGun, GunInterface
-import Utils
+from ai_control import SensorData
+from player_control import ControlScheme
+import config_provider
+import utils
 
-FIELD_SIZE = 1000
-TILE_SIZE = 10
+# ==================================
+# Server
+# ==================================
+#
+# In this file, you will find the main game:
+# The Game class will define properties of the window.
+# The board class controls the execution of the game.
+# After the board state is initiated with help of the configparser,
+# start the main loop of the game, performing actions with a certain tick rate.
+# These actions include:
+# - Forwarding / execution of key inputs.
+# - Calculation and selection of data to send to robot units.
+# - Sending and enquiring data to and from robot units.
+# - Physics engine calculations.
+# Also, paint the game with help of Qt.
+#
+# CHANGE HERE:
+# - the main loop
+# - window and paint functions
+# - physics of movement
+# - collision mechanics
+# - bullet movement and collision
+# - Qt key events and key state lists
+# - creation of message data & vision
+# - control over the board's obstacles
+
+
+GAME_TITLE = 'SpaceBaseRobots'
+FIELD_SIZE = config_provider.FIELD_SIZE
+TILE_SIZE = config_provider.TILE_SIZE
 
 
 class Game(QMainWindow):
@@ -32,60 +62,134 @@ class Game(QMainWindow):
         # setting up Window
         y_offset = (1080 - FIELD_SIZE) / 2
         self.setGeometry(300, y_offset, FIELD_SIZE, FIELD_SIZE)
-        self.setWindowTitle('RobotGame')
+        self.setWindowTitle(GAME_TITLE)
         self.show()
 
 
 class Board(QWidget):
     TILE_COUNT = int(FIELD_SIZE / TILE_SIZE)
-    SECONDS_PER_TICK = 0.05
+    SECONDS_PER_TICK = config_provider.SECONDS_PER_TICK
 
     def __init__(self, parent):
         super().__init__(parent)
 
-        self.obstacleArray = Utils.create_example_array(Board.TILE_COUNT)
+        # TODO
+        config_reader = config_provider.ConfigReader()
+        config_reader.read_level('level1.txt')
+        self.obstacleArray = config_reader.create_level()
         self.rectangles = self.group_tiles_into_rectangles(self.obstacleArray)
+
+        # self.robots = scenario.deploy_robots_from_config()
+
+        # self.obstacleArray = utils.create_example_array(Board.TILE_COUNT)
 
         # Create an additional obstacle list from array
         # storing the position values of every obstacle.
         # Since we don't change the obstacleArray,
         # this call is only needed once.
-        self.obstacle_list = Utils.generate_obstacle_list(
+        self.obstacle_list = utils.generate_obstacle_list(
             self.obstacleArray, Board.TILE_COUNT)
 
-        # TODO watch out that it doesn't get too big
         self.time_stamp = -1
 
         self.init_textures()
 
-        # A list of DataRobots
+        # Store data representations of all involved robot units.
         self.robots = []
 
+        # Data representations of bullets.
         self.bullets = set()
 
+        # Used by example extension.
         self.collision_scenarios = dict()
 
-        self.create_scenario()
+        # Initiate board state and game parameters.
+        # samurai TODO
+        # self.create_scenario()
+        config_reader.read_robots()
+        self.robots = config_reader.create_robots()
 
+        # Inititate key listener.
         self.key_states = dict()
         self.stateless_keys = dict()
         self.initiate_key_listening()
+        self.setFocusPolicy(Qt.StrongFocus)
 
+        # Start the calculation process of the AI.
         for robot in self.robots:
             robot.start()
 
+        # Start the game loop.
         self.game_loop_barrier = threading.Barrier(2)
         self.init_game_loop()
 
+    # ==================================
+    # Set-Up and initiation
+    # ==================================
+
     def init_textures(self):
-        self.board_texture = QPixmap("textures/board.png")
-        self.wall_texture = QPixmap("textures/wall.png")
-        self.border_texture = QPixmap("textures/border.png")
-        self.hole_texture = QPixmap("textures/hole.png")
-        self.robot_texture = QPixmap("textures/robot.png")
-        self.bullet_texture = QPixmap("textures/bullet.png")
+        board_string = "textures/board.png"
+        wall_string = "textures/wall.png"
+        border_string = "textures/border.png"
+        hole_string = "textures/hole.png"
+        robot_string = "textures/robot.png"
+        bullet_string = "textures/bullet.png"
+
+        paths = (board_string, wall_string, border_string,
+                 hole_string, robot_string, bullet_string)
+
+        missing_no = [p for p in paths if not os.path.exists(p)]
+
+        if missing_no:
+            missing_str = ', '.join(missing_no)
+            d = QMessageBox()
+            d.setIcon(QMessageBox.Critical)
+            d.setText('Missing textures detected!')
+            d.setInformativeText(f'Texture(s) "{missing_str}" missing.')
+            d.setWindowTitle('WARNING: Missing textures!')
+            d.exec_()
+
+        self.board_texture = QPixmap(board_string)
+        self.wall_texture = QPixmap(wall_string)
+        self.border_texture = QPixmap(border_string)
+        self.hole_texture = QPixmap(hole_string)
+        self.robot_texture = QPixmap(robot_string)
+        self.bullet_texture = QPixmap(bullet_string)
+
+    def initiate_key_listening(self):
+        """Set up key listing by creating lists of keys to map.
+        Also map whether keys are stateless or require state information."""
+
+        collected_keys_states = defaultdict(list)
+        collected_keys_stateless = defaultdict(list)
+
+        # collect all key bindings from the robots
+        for robot in self.robots:
+            # no key bindings for this robot
+            if not robot.player_control:
+                continue
+
+            robot_keys = robot.player_control.control_scheme
+            for key, value in robot_keys.items():
+                if value in ControlScheme.STATELESS_KEYS:
+                    collected_keys_stateless[key].append(robot)
+                if value in ControlScheme.KEYS_WITH_STATE:
+                    collected_keys_states[key].append(robot)
+
+        # create key forwarding maps
+        for key, value in collected_keys_states.items():
+            self.key_states[key] = dict(is_pressed=False,
+                                        was_pressed=False,
+                                        targets=tuple(value))
+
+        for key, value in collected_keys_stateless.items():
+            self.stateless_keys[key] = tuple(value)
 
     def init_game_loop(self):
+        """Starts the game loop scheduler in another thread.
+        Scheduler leaves the event control in hands of Qt,
+        but will call the game loop in periodic intervalls.
+        """
 
         def game_loop_scheduler():
             # get local reference
@@ -125,16 +229,18 @@ class Board(QWidget):
     # ==================================
 
     def game_loop(self):
-        """The game's main loop."""
+        """The game's main loop.
+        It enacts key input, performs physics calculations
+        and sends and queries data from and to robot units."""
 
         # control part
-
+        # ------------
         self.time_stamp += 1
 
         self.handle_keys_with_state()
 
         # physics part
-
+        # ------------
         self.calculate_shoot_action()
 
         self.calculate_bullets()
@@ -142,14 +248,11 @@ class Board(QWidget):
         for robot in self.robots:
             poll = robot.poll_action_data()
             self.calculate_robot(poll, robot)
-            # if collision:
-            #     m = self.create_bonk_message(collision)
-            #     robot.send_sensor_data(m)
 
         self.check_collision_robots()
 
         # message part
-
+        # ------------
         if self.time_stamp % 10 == 0:
             m = self.create_alert_message()
             for robot in self.robots:
@@ -162,106 +265,408 @@ class Board(QWidget):
             m = self.create_position_message(robot)
             robot.send_sensor_data(m)
 
-        # signal that calculations are done
+        # signal, that calculations are done
         self.game_loop_barrier.wait()
 
-    def create_scenario(self):
-        """Here, you can implement the scenario on the board.
+    # ==================================
+    # Key input Area
+    # ==================================
+
+    def keyPressEvent(self, event):
+        key = event.key()
+
+        # handle stateless keys
+        if key in self.stateless_keys:
+            for robot in self.stateless_keys[key]:
+                robot.enter_key_action(key)
+
+        # set state variables for keys with state
+        if key in self.key_states:
+            key_dict = self.key_states[key]
+            key_dict['is_pressed'] = True
+            key_dict['was_pressed'] = True
+
+    def keyReleaseEvent(self, event):
+        key = event.key()
+
+        # set state variables for keys with state
+        if key in self.key_states:
+            key_dict = self.key_states[key]
+            key_dict['is_pressed'] = False
+
+    def handle_keys_with_state(self):
+        for key, value in self.key_states.items():
+            # state is acitve
+            if value['is_pressed'] or value['was_pressed']:
+                # TODO maybe only call when needed
+                value['was_pressed'] = False
+                for robot in value['targets']:
+                    robot.enter_key_action(key, state=True)
+            # state is inactive
+            else:
+                for robot in value['targets']:
+                    robot.enter_key_action(key, state=False)
+
+        # perform actions for entwined keys
+        for robot in self.robots:
+            robot.finish_key_actions()
+
+    # ==================================
+    # Message Area
+    # ==================================
+    # ADD: You can add the creation of a new message type here!
+
+    def create_alert_message(self):
+        data = []
+
+        for robot in self.robots:
+            data.append((robot.x, robot.y))
+
+        return SensorData(SensorData.ALERT_STRING, data, self.time_stamp)
+
+    def create_position_message(self, robot):
+
+        data = (robot.x, robot.y, robot.alpha, robot.v, robot.v_alpha)
+        return SensorData(SensorData.POSITION_STRING, data, self.time_stamp)
+
+    def create_vision_message(self, robot):
+        "New message type for FoV-data of a robot."
+
+        # list of wall object tuples:
+        # ((xpos, ypos), type, distance)
+        board_data = self.calculate_vision_board(robot)
+
+        # list of robot object tuples:
+        # ((xpos, ypos), distance)
+        robot_data = self.calculate_vision_robots(robot)
+
+        data = (board_data, robot_data)
+        return SensorData(SensorData.VISION_STRING, data, self.time_stamp)
+
+    # ==================================
+    # Vision Area
+    # ==================================
+
+    def calculate_vision_board(self, robot):
+        """Calculate a list of all obejcts seen by a robot.
+        The objects are reduced to their center points for this calculation.
+        Returns a list of tuple values for obejcts seen:
+        (index in obstacle_Array, obstacle type, distance from robot's center)
         """
-        # First add the robots.
-        pos1 = (500, 750, 75, 0, 0)
-        mv1 = RunMovement()
-        robo1 = self.construct_robot(TILE_SIZE * 4, mv1, 20, 10, pos1,
-                                     max_life=5)
-        robo1.set_alert_flag()
-        self.deploy_robot(robo1)
 
-        pos2 = (45, 845, 0, 0, 0)
-        mv2 = ChaseMovementGun(0)
-        gun = RoboGun()
-        RoboGun.trigun_decorator(gun)
-        robo2 = self.construct_robot(
-            TILE_SIZE * 3, mv2, 12, 10, pos2, gun=gun, max_life=1)
-        robo2.setup_player_control(
-            control_scheme=ControlScheme.player_two_scheme)
-        # robo2.set_alert_flag()
-        self.deploy_robot(robo2)
+        # get the objects representative points
+        points = self.obstacle_list * 10 + 5
+        point = (robot.x, robot.y)
 
-        pos3 = (965, 35, 240, 0, 0)
-        mv3 = PermanentGunMovement()
-        robo3 = self.construct_robot(TILE_SIZE * 2.5, mv3, 5, 15, pos3,
-                                     v_max=12, v_alpha_max=30)
-        robo3.set_alert_flag()
-        pc = PlayerControl(robo3, ControlScheme.default_scheme,
-                           invasive_controls=True, alpha_accel_amt=10)
-        robo3.setup_player_control(pc)
-        self.deploy_robot(robo3)
+        # use calculate_angles for the maths
+        diffs, dists = utils.calculate_angles(points, point,
+                                              robot.alpha, robot.fov_angle)
 
-        pos4 = (300, 650, 70, 0, 0)
-        mv4 = ChaseAvoidMovementGun(0)
-        gun4 = RoboGun(bullet_speed=30)
-        robo4 = self.construct_robot(
-            TILE_SIZE * 2, mv4, 15, 15, pos4, gun=gun4)
-        # robo4.set_alert_flag()
-        self.deploy_robot(robo4)
-        # Then add scenario recipes.
-        # self.create_catch_recipe(0, [3, 1, 2])
+        out = []
+        for obst, dif, dist in zip(self.obstacle_list, diffs, dists):
+            # if angle difference is greater zero, the obejct will not be seen
+            if dif <= 0:
+                x, y = obst
+                data = (obst, self.obstacleArray[x][y], dist)
+                out.append(data)
 
-    def deploy_robot(self, data_robot):
-        self.robots.append(data_robot)
+        return out
+
+    def calculate_vision_robots(self, robot):
+        """Calculate a list of robots seen by a robot.
+        A robot (a) can be seen by robot (x) if:
+        - (a) touches (x)
+        - (a)s center is in the direct FoV-angle of (x)
+        - a point of (a)s radius is in the direct FoV-angle of (x)
+
+        For the last criteria, we check, if (a) intersects one of the rays,
+        marking the outline of the FoV.
+
+        Returns an array with entries for each robot:
+        The array index equals the robot's position in the server's array.
+        Array entries:
+        False, if the robot can not be seen.
+        A tuple, if the robot is seen:
+        (position, distance between the robot's centers)
+        """
+        point = (robot.x, robot.y)
+
+        # no robot is seen per default.
+        result = [False] * len(self.robots)
+        point_list = []
+
+        # robots in this list must undergo the angle-check
+        # since they don't overlap.
+        # this also stops invalid point values
+        # from being inserted in calculate_angle.
+        calc_list = []
+        calc_indices = []
+
+        # distance-check
+        for index, rb in enumerate(self.robots):
+            # for each robot, get its distance to (x) and calculate,
+            # wheather they overlap.
+            pos = (rb.x, rb.y)
+            check, d = utils.overlap_check(pos, point, rb.radius, robot.radius)
+            # create a list of position and distance for EVERY robot.
+            point_list.append((pos, d))
+
+            # the actual overlap-check:
+            if check:
+                result[index] = (pos, d)
+            # add more cases, if you want to propagate the angles as well
+            else:
+                calc_list.append(pos)
+                calc_indices.append(index)
+
+        # angle-check
+        angles = []
+        if calc_list:
+            angles, _ = utils.calculate_angles(calc_list, point,
+                                               robot.alpha, robot.fov_angle)
+
+        for index, dif in zip(calc_indices, angles):
+            # if the difference value is positive, the center is not seen.
+            if dif <= 0:
+                result[index] = point_list[index]
+
+        # ray-check
+        # calculate the two border rays of the fov
+        ray1 = utils.vector_from_angle(robot.alpha - robot.fov_angle/2)
+        ray2 = utils.vector_from_angle(robot.alpha + robot.fov_angle/2)
+
+        for index, val in enumerate(result):
+            # only check robots that are not already seen
+            if not val:
+                rb = self.robots[index]
+                circle = (rb.x, rb.y, rb.radius)
+                # again, python helps us out!
+                if (utils.ray_check(point, ray1, circle) or
+                        utils.ray_check(point, ray2, circle)):
+                    result[index] = point_list[index]
+
+        # now the list is complete
+        return result
+
+    # ==================================
+    # Collision Area
+    # ==================================
+
+    # TODO  1. put this in the proper part of this class
+    #       2. fix this and make it pretty
+    def group_tiles_into_rectangles(self, tiles_array):
+        rects = []
+        in_row = [[False] * 100 for _ in range(100)]
+        in_col = [[False] * 100 for _ in range(100)]
+        for tile_x in range(100):
+            for tile_y in range(100):
+                tile_type = self.obstacleArray[tile_x][tile_y]
+                last_x = tile_x
+                last_y = tile_y
+                if tile_type and not in_row[tile_x][tile_y]:
+                    for x in range(100):
+                        neighbour_x = Utils.limit(tile_x + x, 0, 99)
+                        if tile_type == self.obstacleArray[neighbour_x][tile_y]:
+                            last_x = neighbour_x
+                            in_row[neighbour_x][tile_y] = True
+                        else:
+                            break
+                if tile_type and not in_col[tile_x][tile_y]:
+                    for y in range(100):
+                        neighbour_y = Utils.limit(tile_y + y, 0, 99)
+                        if tile_type == self.obstacleArray[tile_x][neighbour_y]:
+                            last_y = neighbour_y
+                            in_col[tile_x][neighbour_y] = True
+                        else:
+                            break
+                if tile_type:
+                    rect_x = tile_x * TILE_SIZE
+                    rect_y = tile_y * TILE_SIZE
+                    row_len = (last_x - tile_x) * TILE_SIZE + TILE_SIZE
+                    col_len = (last_y - tile_y) * TILE_SIZE + TILE_SIZE
+                    if not tile_x == last_x:
+                        rects.append((rect_x, rect_y, row_len, 10, tile_type))
+                    if not tile_y == last_y:
+                        rects.append((rect_x, rect_y, 10, col_len, tile_type))
+        return rects
+
+    def calculate_robot(self, poll, robot):
+        """Uses current position data of robot robot and acceleration values
+        polled from the robot to calculate new position values.
+        """
+
+        # unpack robot output
+        a, a_alpha = poll
+
+        # checks if acceleration is valid
+        a = utils.limit(a, -robot.a_max, robot.a_max)
+
+        # checks if angle acceleration is valid
+        a_alpha = utils.limit(a_alpha, -robot.a_alpha_max, robot.a_alpha_max)
+
+        # calculates velocities
+        new_v = utils.limit(robot.v + a, -1 * robot.v_max, robot.v_max)
+        new_v_alpha = utils.limit(robot.v_alpha + a_alpha,
+                                  -1 * robot.v_alpha_max, robot.v_alpha_max)
+
+        # calculate alpha and x and y component of v
+        alpha = robot.alpha + new_v_alpha
+        alpha = alpha % 360
+        radian = ((alpha - 90) / 180 * math.pi)
+
+        dx = new_v * math.cos(radian)
+        dy = new_v * math.sin(radian)
+
+        # calculates the new position - factors in collisions
+        col_data = self.col_robots_walls(robot, dx, dy, new_v, new_v_alpha)
+        dx_col, dy_col, v_col, v_alpha_col = col_data
+        new_position_col = (robot.x + dx_col, robot.y + dy_col,
+                            alpha, v_col, new_v_alpha)
+
+        # re-place the robot on the board
+        Board.place_robot(robot, *new_position_col)
+        # sends tuple to be used as "sensor_data"
+        return new_position_col
+
+    def col_robots_walls(self, robot, max_dx, max_dy, v, v_alpha):
+        """Task 2: Here the collision with obstacles is calculated."""
+
+        min_dx = max_dx
+        min_dy = max_dy
+        final_tile_type = 0
+        # tests all tiles in the robots reach for collision
+        for obstacle in self.rectangles:
+            tile_type = obstacle[4]
+            dx, dy = self.col_robots_walls_helper(max_dx, max_dy,
+                                                  robot, obstacle)
+
+            if abs(dx) < abs(min_dx):
+                min_dx = dx
+                final_tile_type = tile_type
+            if abs(dy) < abs(min_dy):
+                min_dy = dy
+                final_tile_type = tile_type
+
+        if final_tile_type == 3:
+            robot.deal_damage(1000)
+            v = 0
+            v_alpha = 0
+
+        return min_dx, min_dy, v, v_alpha
+
+    @staticmethod
+    def col_robots_walls_helper(max_dx, max_dy, robot, rect):
+        tile_origin = QPointF(rect[0], rect[1])
+        dx_step = max_dx/10
+        dy_step = max_dy/10
+
+        dx = dy = 0
+        x_collided = False
+        y_collided = False
+        for _ in range(10):
+
+            if not x_collided:
+                dx += dx_step
+                robot_center = QPointF(
+                    dx + robot.x, dy + robot.y - 1 * dy_step)
+                x_collided = Utils.check_collision_circle_rect(
+                    robot_center, robot.radius, tile_origin, rect[2], rect[3])
+
+            if not y_collided:
+                dy += dy_step
+                robot_center = QPointF(
+                    dx + robot.x - 1 * dx_step, dy + robot.y)
+                y_collided = Utils.check_collision_circle_rect(
+                    robot_center, robot.radius, tile_origin, rect[2], rect[3])
+
+            if x_collided and y_collided:
+                break
+
+        if x_collided:
+            dx += -dx_step
+        if y_collided:
+            dy += -dy_step
+
+        return dx, dy
 
     # TODO we might improve that function
-    def initiate_key_listening(self):
-        self.setFocusPolicy(Qt.StrongFocus)
-        collected_keys_states = defaultdict(list)
-        collected_keys_stateless = defaultdict(list)
+    def check_collision_robots(self):
+        s = len(self.robots)
+        for i in range(s):
+            for j in range(s):
+                if not i == j:
+                    bot1 = self.robots[i]
+                    bot2 = self.robots[j]
+                    c1 = (bot1.x, bot1.y)
+                    r1 = bot1.radius
+                    c2 = (bot2.x, bot2.y)
+                    r2 = bot2.radius
+                    check, _ = utils.overlap_check(c1, c2, r1, r2)
+                    if check:
+                        self.handle_collision_event((i, j))
+
+    # ==================================
+    # Gun/Bullet Area
+    # ==================================
+
+    def calculate_shoot_action(self):
         for robot in self.robots:
-            if not robot.player_control:
-                continue
-            robot_keys = robot.player_control.control_scheme
-            for key, value in robot_keys.items():
-                # TODO distinguish stateless keys from keys with state
-                if not value == ControlScheme.AUTOPILOT_STRING:
-                    collected_keys_states[key].append(robot)
-                else:
-                    collected_keys_stateless[key].append(robot)
+            maybe_bullet = robot.perform_shoot_action()
+            if maybe_bullet:
+                self.bullets.add(maybe_bullet)
 
-        for key, value in collected_keys_states.items():
-            self.key_states[key] = dict(is_pressed=False,
-                                        was_pressed=False,
-                                        targets=tuple(value))
-
-        for key, value in collected_keys_stateless.items():
-            self.stateless_keys[key] = tuple(value)
-
-    def construct_robot(self, radius, movement_funct, a_max, a_alpha_max,
-                        position, fov_angle=90, v_max=50, v_alpha_max=90,
-                        max_life=3, respawn_timer=3, gun=None):
+    def calculate_bullets(self):
         """
-        Create a new robot with given parameters.
-        You can add it to the board using deploy_robot().
+        Here, the bullet movement happens.
+        Check for collision with walls and despawn the bullet.
+        Check for collision with robots and kill the robot (despawn the bullet)
         """
 
-        # Create robot body with its set parameters.
-        base_robot = BaseRobot(radius, a_max, a_alpha_max, fov_angle=fov_angle,
-                               v_max=v_max, v_alpha_max=v_alpha_max,
-                               max_life=max_life, respawn_timer=respawn_timer)
+        for bullet in self.bullets.copy():
+            # move
+            initial_position = bullet.position
+            for test_speed in range(int(bullet.speed)):
 
-        # Create autonomous robot unit.
-        thread_robot = ThreadRobot(base_robot, movement_funct)
+                direction_vec = utils.vector_from_angle(bullet.direction)
+                movement_vec = direction_vec * test_speed
+                new_position = initial_position + movement_vec
+                bullet.position = new_position
 
-        # Create data representation to be added to tracking of the server.
-        data_robot = DataRobot(base_robot, thread_robot)
-        # set up communication with thread robot about gun data
-        data_robot.setup_gun(gun)
-        # a position consists of (x, y, alpha, v, v_alpha) values
-        data_robot.place_robot(*position)
+                # perform collision with walls and robots
+                if (self.col_bullet_walls(bullet) or
+                        self.col_robots_bullets(bullet)):
+                    break
 
-        return data_robot
+    def col_robots_bullets(self, bullet):
+        for robot in self.robots:
+            robot_center = (robot.x, robot.y)
+            distance = utils.distance(robot_center, bullet.position)
+            if distance <= robot.radius:
+                robot.deal_damage()
+                # robot.dead = True
+                self.bullets.remove(bullet)
+                return True
+        return False
+
+    def col_bullet_walls(self, bullet):
+        position = bullet.position
+
+        tile_x = int(position[0] / TILE_SIZE)
+        tile_x = utils.limit(tile_x, 0, Board.TILE_COUNT - 1)
+
+        tile_y = int(position[1] / TILE_SIZE)
+        tile_y = utils.limit(tile_y, 0, Board.TILE_COUNT - 1)
+
+        if self.obstacleArray[tile_x][tile_y] != 0:
+            self.bullets.remove(bullet)
+            return True
+
+        return False
 
     # ==================================
     # Painter Area
     # ==================================
+
     def paintEvent(self, e):
         qp = QPainter()
         qp.begin(self)
@@ -381,432 +786,32 @@ class Board(QWidget):
             qp.restore()
 
     # ==================================
-    # Scenario Area
+    # Extensibility examples
     # ==================================
+    # Here, we created a small abstract event handler for robot collision.
+    # This example is a showcase for quick yet abstract extensibility.
 
-    def create_catch_recipe(self, fugitive, hunters):
-        """Adds a new concrete scenario recipe.
-        If fugitive is caught, teleport catcher away.
+    def add_catch_recipe(self, fugitive, hunters):
+        """Adds a new recipe type for collision events.
+        If fugitive is caught by any hunter, perform recipe action.
         """
 
-        # TODO make abstract with external callee
-
-        def callee(hunter, board):
+        def recipe_action(hunter, board):
             fugitive_bot = board.robots[fugitive]
             fugitive_pos = (fugitive_bot.x, fugitive_bot.y)
             hunter_bot = board.robots[hunter]
             Board.teleport_furthest_corner(fugitive_pos, hunter_bot)
 
         for h in hunters:
-            f = partial(callee, h)
+            f = partial(recipe_action, h)
             self.collision_scenarios[(fugitive, h)] = f
-            # self.collision_scenarios[(h, fugitive)] = f
 
-    def perform_collision_scenario(self, col_tuple):
-        """Collision scenario handler.
-        Looks if a collision scenario occured and performs the actions needed.
+    def handle_collision_event(self, col_tuple):
+        """Collision event handler.
+        Perform all given recipes for current collision event.
         """
         if col_tuple in self.collision_scenarios:
             self.collision_scenarios[col_tuple](self)
-
-    # ==================================
-    # Vision Area
-    # ==================================
-
-    def calculate_vision_board(self, robot):
-        """Calculate a list of all obejcts seen by a robot.
-        The objects are reduced to their center points for this calculation.
-        Returns a list of tuple values for obejcts seen:
-        (index in obstacle_Array, obstacle type, distance from robot's center)
-        """
-
-        # get the objects representative points
-        points = self.obstacle_list * 10 + 5
-        point = (robot.x, robot.y)
-
-        # use calculate_angles for the maths
-        diffs, dists = Utils.calculate_angles(points, point,
-                                              robot.alpha, robot.fov_angle)
-
-        out = []
-        for obst, dif, dist in zip(self.obstacle_list, diffs, dists):
-            # if angle difference is greater zero, the obejct will not be seen
-            if dif <= 0:
-                x, y = obst
-                data = (obst, self.obstacleArray[x][y], dist)
-                out.append(data)
-
-        return out
-
-    def calculate_vision_robots(self, robot):
-        """Calculate a list of robots seen by a robot.
-        A robot (a) can be seen by robot (x) if:
-        - (a) touches (x)
-        - (a)s center is in the direct FoV-angle of (x)
-        - a point of (a)s radius is in the direct FoV-angle of (x)
-
-        For the last criteria, we check, if (a) intersects one of the rays,
-        marking the outline of the FoV.
-
-        Returns an array with entries for each robot:
-        The array index equals the robot's position in the server's array.
-        Array entries:
-        False, if the robot can not be seen.
-        A tuple, if the robot is seen:
-        (position, distance between the robot's centers)
-        """
-        point = (robot.x, robot.y)
-
-        # no robot is seen per default.
-        result = [False] * len(self.robots)
-        point_list = []
-
-        # robots in this list must undergo the angle-check
-        # since they don't overlap.
-        # this also stops invalid point values
-        # from being inserted in calculate_angle.
-        calc_list = []
-        calc_indices = []
-
-        # distance-check
-        for index, rb in enumerate(self.robots):
-            # for each robot, get its distance to (x) and calculate,
-            # wheather they overlap.
-            pos = (rb.x, rb.y)
-            check, d = Utils.overlap_check(pos, point, rb.radius, robot.radius)
-            # create a list of position and distance for EVERY robot.
-            point_list.append((pos, d))
-
-            # the actual overlap-check:
-            if check:
-                result[index] = (pos, d)
-            # add more cases, if you want to propagate the angles as well
-            else:
-                calc_list.append(pos)
-                calc_indices.append(index)
-
-        # angle-check
-        angles = []
-        if calc_list:
-            angles, _ = Utils.calculate_angles(calc_list, point,
-                                               robot.alpha, robot.fov_angle)
-
-        for index, dif in zip(calc_indices, angles):
-            # if the difference value is positive, the center is not seen.
-            if dif <= 0:
-                result[index] = point_list[index]
-
-        # ray-check
-        # calculate the two border rays of the fov
-        ray1 = Utils.vector_from_angle(robot.alpha - robot.fov_angle/2)
-        ray2 = Utils.vector_from_angle(robot.alpha + robot.fov_angle/2)
-
-        for index, val in enumerate(result):
-            # only check robots that are not already seen
-            if not val:
-                rb = self.robots[index]
-                circle = (rb.x, rb.y, rb.radius)
-                # again, python helps us out!
-                if (Utils.ray_check(point, ray1, circle) or
-                        Utils.ray_check(point, ray2, circle)):
-                    result[index] = point_list[index]
-
-        # now the list is complete
-        return result
-
-    # ==================================
-    # Collision Area
-    # ==================================
-
-    # TODO  1. put this in the proper part of this class
-    #       2. fix this and make it pretty
-    def group_tiles_into_rectangles(self, tiles_array):
-        rects = []
-        in_row = [[False] * 100 for _ in range(100)]
-        in_col = [[False] * 100 for _ in range(100)]
-        for tile_x in range(100):
-            for tile_y in range(100):
-                tile_type = self.obstacleArray[tile_x][tile_y]
-                last_x = tile_x
-                last_y = tile_y
-                if tile_type and not in_row[tile_x][tile_y]:
-                    for x in range(100):
-                        neighbour_x = Utils.limit(tile_x + x, 0, 99)
-                        if tile_type == self.obstacleArray[neighbour_x][tile_y]:
-                            last_x = neighbour_x
-                            in_row[neighbour_x][tile_y] = True
-                        else:
-                            break
-                if tile_type and not in_col[tile_x][tile_y]:
-                    for y in range(100):
-                        neighbour_y = Utils.limit(tile_y + y, 0, 99)
-                        if tile_type == self.obstacleArray[tile_x][neighbour_y]:
-                            last_y = neighbour_y
-                            in_col[tile_x][neighbour_y] = True
-                        else:
-                            break
-                if tile_type:
-                    rect_x = tile_x * TILE_SIZE
-                    rect_y = tile_y * TILE_SIZE
-                    row_len = (last_x - tile_x) * TILE_SIZE + TILE_SIZE
-                    col_len = (last_y - tile_y) * TILE_SIZE + TILE_SIZE
-                    if not tile_x == last_x:
-                        rects.append((rect_x, rect_y, row_len, 10, tile_type))
-                    if not tile_y == last_y:
-                        rects.append((rect_x, rect_y, 10, col_len, tile_type))
-        return rects
-
-    def calculate_robot(self, poll, robot):
-        """Uses current position data of robot robot and acceleration values
-        polled from the robot to calculate new position values.
-        """
-
-        # unpack robot output
-        a, a_alpha = poll
-
-        # checks if acceleration is valid
-        a = Utils.limit(a, -robot.a_max, robot.a_max)
-
-        # checks if angle acceleration is valid
-        a_alpha = Utils.limit(a_alpha, -robot.a_alpha_max, robot.a_alpha_max)
-
-        # calculates velocities
-        new_v = Utils.limit(robot.v + a, -1 * robot.v_max, robot.v_max)
-        new_v_alpha = Utils.limit(robot.v_alpha + a_alpha,
-                                  -1 * robot.v_alpha_max, robot.v_alpha_max)
-
-        # calculate alpha and x and y component of v
-        alpha = robot.alpha + new_v_alpha
-        alpha = alpha % 360
-        radian = ((alpha - 90) / 180 * math.pi)
-
-        dx = new_v * math.cos(radian)
-        dy = new_v * math.sin(radian)
-
-        # calculates the new position - factors in collisions
-        col_data = self.col_robots_walls(robot, dx, dy, new_v, new_v_alpha)
-        dx_col, dy_col, v_col, v_alpha_col = col_data
-        new_position_col = (robot.x + dx_col, robot.y + dy_col,
-                            alpha, v_col, new_v_alpha)
-
-        # re-place the robot on the board
-        Board.place_robot(robot, *new_position_col)
-        # sends tuple to be used as "sensor_data"
-        return new_position_col
-
-    def col_robots_walls(self, robot, max_dx, max_dy, v, v_alpha):
-        """Task 2: Here the collision with obstacles is calculated."""
-
-        min_dx = max_dx
-        min_dy = max_dy
-        final_tile_type = 0
-        # tests all tiles in the robots reach for collision
-        for obstacle in self.rectangles:
-            tile_type = obstacle[4]
-            dx, dy = self.col_robots_walls_helper(max_dx, max_dy,
-                                                  robot, obstacle)
-
-            if abs(dx) < abs(min_dx):
-                min_dx = dx
-                final_tile_type = tile_type
-            if abs(dy) < abs(min_dy):
-                min_dy = dy
-                final_tile_type = tile_type
-
-        if final_tile_type == 3:
-            robot.deal_damage(1000)
-            v = 0
-            v_alpha = 0
-
-        return min_dx, min_dy, v, v_alpha
-
-    @staticmethod
-    def col_robots_walls_helper(max_dx, max_dy, robot, rect):
-        tile_origin = QPointF(rect[0], rect[1])
-        dx_step = max_dx/10
-        dy_step = max_dy/10
-
-        dx = dy = 0
-        x_collided = False
-        y_collided = False
-        for _ in range(10):
-
-            if not x_collided:
-                dx += dx_step
-                robot_center = QPointF(dx + robot.x, dy + robot.y - 1 * dy_step)
-                x_collided = Utils.check_collision_circle_rect(
-                    robot_center, robot.radius, tile_origin, rect[2], rect[3])
-
-            if not y_collided:
-                dy += dy_step
-                robot_center = QPointF(dx + robot.x - 1 * dx_step, dy + robot.y)
-                y_collided = Utils.check_collision_circle_rect(
-                    robot_center, robot.radius, tile_origin, rect[2], rect[3])
-
-            if x_collided and y_collided:
-                break
-
-        if x_collided:
-            dx += -dx_step
-        if y_collided:
-            dy += -dy_step
-
-        return dx, dy
-
-    # TODO we might improve that function
-    def check_collision_robots(self):
-        s = len(self.robots)
-        for i in range(s):
-            for j in range(s):
-                if not i == j:
-                    bot1 = self.robots[i]
-                    bot2 = self.robots[j]
-                    c1 = (bot1.x, bot1.y)
-                    r1 = bot1.radius
-                    c2 = (bot2.x, bot2.y)
-                    r2 = bot2.radius
-                    check, _ = Utils.overlap_check(c1, c2, r1, r2)
-                    if check:
-                        self.perform_collision_scenario((i, j))
-
-    # ==================================
-    # Gun/Bullet Area
-    # ==================================
-
-    def calculate_shoot_action(self):
-        for robot in self.robots:
-            maybe_bullet = robot.perform_shoot_action()
-            if maybe_bullet:
-                self.bullets.add(maybe_bullet)
-
-    def calculate_bullets(self):
-        """
-        Here, the bullet movement happens.
-        Check for collision with walls and despawn the bullet.
-        Check for collision with robots and kill the robot (despawn the bullet)
-        """
-
-        for bullet in self.bullets.copy():
-            # move
-            initial_position = bullet.position
-            for test_speed in range(int(bullet.speed)):
-
-                direction_vec = Utils.vector_from_angle(bullet.direction)
-                movement_vec = direction_vec * test_speed
-                new_position = initial_position + movement_vec
-                bullet.position = new_position
-
-                # perform collision with walls and robots
-                if (self.col_bullet_walls(bullet) or
-                        self.col_robots_bullets(bullet)):
-                    break
-
-    def col_robots_bullets(self, bullet):
-        for robot in self.robots:
-            robot_center = (robot.x, robot.y)
-            distance = Utils.distance(robot_center, bullet.position)
-            if distance <= robot.radius:
-                robot.deal_damage()
-                # robot.dead = True
-                self.bullets.remove(bullet)
-                return True
-        return False
-
-    def col_bullet_walls(self, bullet):
-        position = bullet.position
-
-        tile_x = int(position[0] / TILE_SIZE)
-        tile_x = Utils.limit(tile_x, 0, Board.TILE_COUNT - 1)
-
-        tile_y = int(position[1] / TILE_SIZE)
-        tile_y = Utils.limit(tile_y, 0, Board.TILE_COUNT - 1)
-
-        if self.obstacleArray[tile_x][tile_y] != 0:
-            self.bullets.remove(bullet)
-            return True
-
-        return False
-
-    # ==================================
-    # Key input Area
-    # ==================================
-
-    def keyPressEvent(self, event):
-        key = event.key()
-
-        # handle stateless keys
-        if key in self.stateless_keys:
-            for robot in self.stateless_keys[key]:
-                robot.enter_key_action(key)
-
-        # set state variables for keys with state
-        if key in self.key_states:
-            key_dict = self.key_states[key]
-            key_dict['is_pressed'] = True
-            key_dict['was_pressed'] = True
-
-    def keyReleaseEvent(self, event):
-        key = event.key()
-
-        # set state variables for keys with state
-        if key in self.key_states:
-            key_dict = self.key_states[key]
-            key_dict['is_pressed'] = False
-
-    def handle_keys_with_state(self):
-        for key, value in self.key_states.items():
-            # state is acitve
-            if value['is_pressed'] or value['was_pressed']:
-                # TODO maybe only call when needed
-                value['was_pressed'] = False
-                for robot in value['targets']:
-                    robot.enter_key_action(key, state=True)
-            # state is inactive
-            else:
-                for robot in value['targets']:
-                    robot.enter_key_action(key, state=False)
-
-        # perform actions for entwined keys
-        for robot in self.robots:
-            robot.finish_key_actions()
-
-    # ==================================
-    # Message Area
-    # ==================================
-
-    def create_alert_message(self):
-        data = []
-
-        for robot in self.robots:
-            data.append((robot.x, robot.y))
-
-        return SensorData(SensorData.ALERT_STRING, data, self.time_stamp)
-
-    # TODO this is just a frame implementation.
-    def create_bonk_message(self, collision):
-        print('B O N K')
-
-        data = None
-        return SensorData(SensorData.BONK_STRING, data, self.time_stamp)
-
-    def create_position_message(self, robot):
-
-        data = (robot.x, robot.y, robot.alpha, robot.v, robot.v_alpha)
-        return SensorData(SensorData.POSITION_STRING, data, self.time_stamp)
-
-    def create_vision_message(self, robot):
-        "New message type for FoV-data of a robot."
-
-        # list of wall object tuples:
-        # ((xpos, ypos), type, distance)
-        board_data = self.calculate_vision_board(robot)
-
-        # list of robot object tuples:
-        # ((xpos, ypos), distance)
-        robot_data = self.calculate_vision_robots(robot)
-
-        data = (board_data, robot_data)
-        return SensorData(SensorData.VISION_STRING, data, self.time_stamp)
 
     # ==================================
     # Static positioning methods
@@ -859,477 +864,6 @@ class Hazard:
     Wall = 1
     Border = 2
     Hole = 3
-
-
-class DataRobot(BaseRobot):
-    """Data representation of the robots for the server."""
-
-    def __init__(self, base_robot: BaseRobot, thread_robot: ThreadRobot):
-
-        super().__init__(**vars(base_robot))
-
-        # current position
-        self.x = 0
-        self.y = 0
-        self.alpha = 0
-
-        self.v = 0
-        self.v_alpha = 0
-
-        self.gun = None
-
-        # Only some robots should receive an alert message.
-        self.alert_flag = False
-
-        self.thread_robot = thread_robot
-
-        self.player_control = None
-        self.player_control_active = False
-
-        # Use this when respawning the robot
-        self.dead = False
-        self.immune = False
-        self.life = self.max_life
-
-        # Access management system:
-        self.player_input_enabled = True         # inactive TODO
-        self.player_output_enabled = False
-        self.robot_input_enabled = True
-        self.robot_output_enabled = True
-
-        # self.player_gun_access = False
-        # self.robot_gun_access = True
-        self.gun_enabled = False
-
-    def place_robot(self, x, y, alpha, v, v_alpha):
-
-        self.x = x
-        self.y = y
-        self.alpha = alpha
-
-        self.v = v
-        self.v_alpha = v_alpha
-
-    def start(self):
-        self.thread_robot.run()
-
-    # Interface functions for the robot
-    # TODO allow hybrid models
-    def poll_action_data(self):
-
-        if self.player_output_enabled:
-            return self.player_control.send_action_data()
-
-        if self.robot_output_enabled:
-            return self.thread_robot.send_action_data()
-
-        # maybe adapt default data?
-        default_data = (0, 0)
-        return default_data
-
-    def send_sensor_data(self, data):
-        if self.robot_input_enabled:
-            self.thread_robot.receive_sensor_data(data)
-
-    # damage and respawn
-    def deal_damage(self, damage=1):
-        # we don't deal damage to dead or immune units
-        if self.immune or self.dead:
-            return
-
-        self.life = max(0, self.life - damage)
-        if self.life <= 0:
-            self.get_destroyed()
-
-    def get_destroyed(self):
-        self.dead = True
-
-        self.v = 0
-        self.v_alpha = 0
-
-        self.disable_robot_control()
-        self.disable_player_control()
-        self.disable_gun()
-
-        def respawn():
-            self.respawn()
-
-        Utils.execute_after(self.respawn_timer, respawn)
-
-    def respawn(self):
-        self.life = self.max_life
-        self.immune = True
-        point = self.x, self.y
-        Board.teleport_furthest_corner(point, self)
-
-        if self.player_control_active:
-            self.hand_control_to_player()
-        else:
-            self.hand_control_to_robot()
-
-        self.enable_gun()
-
-        self.dead = False
-
-        def disable_immunity():
-            self.immune = False
-
-        Utils.execute_after(1, disable_immunity)
-
-    # gun stuff
-    def perform_shoot_action(self):
-        """Will return a valid bullet, if the robot is shooting.
-        Else returns False.
-        """
-
-        maybe_bullet = False
-
-        if not self.gun or not self.gun_enabled:
-            return maybe_bullet
-
-        maybe_data = self.gun.trigger_fire()
-        if maybe_data:
-            angle = self.alpha
-
-            angle_vector = Utils.vector_from_angle(angle)
-            robot_center = (self.x, self.y)
-            bullet_start = robot_center + (self.radius + 1) * angle_vector
-            # bullet_start = (int(bullet_start[0]), int(bullet_start[1]))
-
-            # prevent bullets from standing still while moving backwards
-            speed = max(0, self.v) + maybe_data
-
-            maybe_bullet = Bullet(position=bullet_start,
-                                  speed=speed,
-                                  direction=angle)
-        return maybe_bullet
-
-    def setup_gun(self, gun=None):
-        """Set up gun communication between autonomous unit and server."""
-        if not gun:
-            gun = RoboGun()
-
-        self.gun = gun
-
-        gun_interface = GunInterface(gun)
-        self.thread_robot.setup_gun_interface(gun_interface)
-
-        self.enable_gun()
-
-        if self.player_control:
-            self.player_control.setup_gun(gun)
-
-    # player control
-    def enter_key_action(self, key, state=None):
-        if self.player_control:
-            self.player_control.calculate_key_action(key, state)
-
-    def finish_key_actions(self):
-        if self.player_control:
-            self.player_control.enter_entwined_keys()
-
-    def invasive_control(self, v_alpha):
-        if self.player_output_enabled:
-            self.v_alpha = v_alpha
-
-    def setup_player_control(self, player_control=None,
-                             control_scheme=None):
-        if not player_control:
-            if not control_scheme:
-                control_scheme = ControlScheme.default_scheme
-            player_control = PlayerControl(self, control_scheme)
-        self.player_control = player_control
-
-        if self.gun:
-            self.player_control.setup_gun(self.gun)
-
-        self.hand_control_to_player()
-
-    def toggle_player_control(self):
-        # we can't toggle while dead
-        if self.dead:
-            return
-
-        if self.player_control_active:
-            self.hand_control_to_robot()
-        else:
-            self.hand_control_to_player()
-
-    # right management
-    def hand_control_to_player(self):
-        # withdraw the rights for the robot
-        self.disable_robot_control()
-        self.disable_robot_gun_access()
-
-        # give the rights to the player
-        self.enable_player_control()
-        self.enable_player_gun_access()
-
-        # notify server, set the state
-        self.player_control_active = True
-
-    def hand_control_to_robot(self):
-        # withdraw rights of the player
-        self.disable_player_control()
-        self.disable_player_gun_acess()
-
-        # give the rights to the robot
-        self.enable_robot_control()
-        self.enable_robot_gun_access()
-
-        # notify server, set the state
-        self.player_control_active = False
-
-    def disable_robot_control(self):
-        self.robot_output_enabled = False
-        self.robot_input_enabled = False
-
-        self.thread_robot.clear_input()
-
-    def enable_robot_control(self):
-        self.thread_robot.clear_input()
-        self.thread_robot.clear_values()
-        self.robot_input_enabled = True
-        self.robot_output_enabled = True
-
-    def disable_player_control(self):
-        self.player_output_enabled = False
-
-    def enable_player_control(self):
-        self.player_output_enabled = True
-
-    def disable_robot_gun_access(self):
-        if self.gun:
-            self.gun.set_gun_access_robot(False)
-            # self.robot_gun_access = False
-            self.gun.clear_input()
-
-    def enable_robot_gun_access(self):
-        if self.gun:
-            self.gun.clear_input()
-            self.gun.set_gun_access_robot(True)
-            # self.robot_gun_access = True
-
-    def disable_player_gun_acess(self):
-        if self.gun:
-            self.gun.set_gun_access_player(False)
-            # self.player_gun_access = False
-            self.gun.clear_input()
-
-    def enable_player_gun_access(self):
-        if self.gun:
-            self.gun.clear_input()
-            self.gun.set_gun_access_player(True)
-            # self.player_gun_access = True
-
-    def disable_gun(self):
-        self.gun_enabled = False
-        self.disable_player_gun_acess()
-        self.disable_robot_gun_access()
-
-    def enable_gun(self):
-        self.gun_enabled = True
-        if self.player_control_active:
-            self.enable_player_gun_access()
-        else:
-            self.enable_robot_gun_access()
-
-    # optional flags
-    def set_alert_flag(self, value=True):
-        self.alert_flag = value
-
-    def set_resync_flag(self, value=True):
-        self.thread_robot.set_resync_flag(value)
-
-
-class PlayerControl:
-    ACCEL_AMT = 3
-    ALPHA_ACCEL_AMT = 5
-
-    STATE_ACTIVE = "A"
-    STATE_PUSH = "D"
-    STATE_INACTIVE = "I"
-
-    STATE_SWITCH = {(STATE_ACTIVE, True): STATE_ACTIVE,
-                    (STATE_INACTIVE, True): STATE_PUSH,
-                    (STATE_PUSH, True): STATE_ACTIVE,
-                    (STATE_ACTIVE, False): STATE_INACTIVE,
-                    (STATE_INACTIVE, False): STATE_INACTIVE,
-                    (STATE_PUSH, False): STATE_INACTIVE}
-
-    def __init__(self, data_robot, control_scheme, accel_amt=None,
-                 alpha_accel_amt=None, invasive_controls=False):
-
-        self.control_scheme = control_scheme
-
-        self.gun = None
-        self.data_robot = data_robot
-
-        self.a = 0
-        self.a_alpha = 0
-
-        # Smoothness of controls.
-        if not accel_amt:
-            accel_amt = PlayerControl.ACCEL_AMT
-        self.accel_amt = accel_amt
-        if not alpha_accel_amt:
-            alpha_accel_amt = PlayerControl.ALPHA_ACCEL_AMT
-        self.alpha_accel_amt = alpha_accel_amt
-
-        self.allow_toggle_autopilot = True
-
-        # State Machine for acc-rev_acc entwinement
-        self.acc_state = PlayerControl.STATE_INACTIVE
-        self.acc_rev_state = PlayerControl.STATE_INACTIVE
-
-        def acc():
-            self.a = self.accel_amt
-
-        def rev_acc():
-            self.a = -1 * self.accel_amt
-
-        def clear_acc():
-            self.a = 0
-
-        def acc_pass():
-            pass
-
-        self.acc_lookup = {(PlayerControl.STATE_INACTIVE, PlayerControl.STATE_INACTIVE): clear_acc,
-                           (PlayerControl.STATE_INACTIVE, PlayerControl.STATE_ACTIVE): rev_acc,
-                           (PlayerControl.STATE_INACTIVE, PlayerControl.STATE_PUSH): rev_acc,
-                           (PlayerControl.STATE_ACTIVE, PlayerControl.STATE_INACTIVE): acc,
-                           (PlayerControl.STATE_ACTIVE, PlayerControl.STATE_ACTIVE): acc_pass,
-                           (PlayerControl.STATE_ACTIVE, PlayerControl.STATE_PUSH): rev_acc,
-                           (PlayerControl.STATE_PUSH, PlayerControl.STATE_INACTIVE): acc,
-                           (PlayerControl.STATE_PUSH, PlayerControl.STATE_ACTIVE): acc,
-                           (PlayerControl.STATE_PUSH, PlayerControl.STATE_PUSH): acc}
-
-        # State Machine for left-right entwinement
-        self.left_state = PlayerControl.STATE_INACTIVE
-        self.right_state = PlayerControl.STATE_INACTIVE
-
-        def lr_left():
-            if invasive_controls:
-                self.data_robot.invasive_control(
-                    v_alpha=-1 * self.alpha_accel_amt)
-            else:
-                self.a_alpha = - 1 * self.alpha_accel_amt
-
-        def lr_right():
-            if invasive_controls:
-                self.data_robot.invasive_control(v_alpha=self.alpha_accel_amt)
-            else:
-                self.a_alpha = self.alpha_accel_amt
-
-        def clear_lr():
-            if invasive_controls:
-                self.data_robot.invasive_control(v_alpha=0)
-            else:
-                self.a_alpha = 0
-
-        def lr_pass():
-            pass
-
-        self.lr_lookup = {
-            (PlayerControl.STATE_INACTIVE, PlayerControl.STATE_INACTIVE): clear_lr,
-            (PlayerControl.STATE_INACTIVE, PlayerControl.STATE_ACTIVE): lr_right,
-            (PlayerControl.STATE_INACTIVE, PlayerControl.STATE_PUSH): lr_right,
-            (PlayerControl.STATE_ACTIVE, PlayerControl.STATE_INACTIVE): lr_left,
-            (PlayerControl.STATE_ACTIVE, PlayerControl.STATE_ACTIVE): lr_pass,
-            (PlayerControl.STATE_ACTIVE, PlayerControl.STATE_PUSH): lr_right,
-            (PlayerControl.STATE_PUSH, PlayerControl.STATE_INACTIVE): lr_left,
-            (PlayerControl.STATE_PUSH, PlayerControl.STATE_ACTIVE): lr_left,
-            (PlayerControl.STATE_PUSH, PlayerControl.STATE_PUSH): clear_lr}
-
-    def calculate_key_action(self, key, state):
-        action_name = self.control_scheme[key]
-        action = getattr(self, action_name)
-        # stateless
-        # TODO distinguish between stateless keys and keys with state
-        if state is None:
-            action()
-        else:
-            action(state_active=state)
-
-    def enter_entwined_keys(self):
-        self.enter_accelarate()
-        self.enter_left_right()
-
-    def accelerate(self, state_active):
-        lookup_tuple = (self.acc_state, state_active)
-        self.acc_state = PlayerControl.STATE_SWITCH[lookup_tuple]
-
-    def accelerate_reverse(self, state_active):
-        lookup_tuple = (self.acc_rev_state, state_active)
-        self.acc_rev_state = PlayerControl.STATE_SWITCH[lookup_tuple]
-
-    def enter_accelarate(self):
-        lookup_tuple = (self.acc_state, self.acc_rev_state)
-        func = self.acc_lookup[lookup_tuple]
-        func()
-
-    def left(self, state_active):
-        lookup_tuple = (self.left_state, state_active)
-        self.left_state = PlayerControl.STATE_SWITCH[lookup_tuple]
-
-    def right(self, state_active):
-        lookup_tuple = (self.right_state, state_active)
-        self.right_state = PlayerControl.STATE_SWITCH[lookup_tuple]
-
-    def enter_left_right(self):
-        lookup_tuple = (self.left_state, self.right_state)
-        func = self.lr_lookup[lookup_tuple]
-        func()
-
-    def shoot(self, state_active):
-        if state_active:
-            self.gun.prepare_fire_player()
-
-    def toggle_autopilot(self):
-        if self.allow_toggle_autopilot:
-            self.data_robot.toggle_player_control()
-
-            def enable_toggle():
-                self.allow_toggle_autopilot = True
-
-            self.allow_toggle_autopilot = False
-            Utils.execute_after(0.5, enable_toggle)
-
-    def send_action_data(self):
-        return self.a, self.a_alpha
-
-    def setup_gun(self, gun):
-        self.gun = gun
-
-
-class ControlScheme:
-    ACC_STRING = 'accelerate'
-    ACC_REV_STRING = 'accelerate_reverse'
-    LEFT_STRING = 'left'
-    RIGHT_STRING = 'right'
-    SHOOT_STRING = 'shoot'
-    AUTOPILOT_STRING = 'toggle_autopilot'
-
-    default_scheme = {Qt.Key_W: ACC_STRING,
-                      Qt.Key_S: ACC_REV_STRING,
-                      Qt.Key_A: LEFT_STRING,
-                      Qt.Key_D: RIGHT_STRING,
-                      Qt.Key_J: SHOOT_STRING,
-                      Qt.Key_P: AUTOPILOT_STRING}
-
-    player_two_scheme = {Qt.Key_Up: ACC_STRING,
-                         Qt.Key_Down: ACC_REV_STRING,
-                         Qt.Key_Left: LEFT_STRING,
-                         Qt.Key_Right: RIGHT_STRING,
-                         Qt.Key_Return: SHOOT_STRING,
-                         Qt.Key_End: AUTOPILOT_STRING}
-
-
-class Bullet:
-    def __init__(self, position, speed, direction):
-        self.position = position
-        self.speed = speed
-        self.direction = direction
 
 
 if __name__ == '__main__':

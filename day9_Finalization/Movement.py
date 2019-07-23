@@ -1,9 +1,13 @@
 import random
 import math
 
+TARGET_OPTION_STRING = 'target'
 
 class Movement:
-    """Implement different movement options."""
+    """Implement different movement responses."""
+
+    RECEIVE_ALERT = False
+    OPTIONS = []
 
     def default(self, data, robot):
         return robot.a, robot.a_alpha
@@ -15,9 +19,6 @@ class Movement:
         return robot.a, robot.a_alpha
 
     def alert(self, data, robot):
-        return robot.a, robot.a_alpha
-
-    def bonk(self, data, robot):
         return robot.a, robot.a_alpha
 
 
@@ -84,6 +85,10 @@ class SpinMovement(Movement):
 
 class FollowMovement(Movement):
     # follows a given Robot
+
+    RECEIVE_ALERT = True
+    OPTIONS = [TARGET_OPTION_STRING]
+
     def __init__(self, target):
         self.target = target
 
@@ -142,6 +147,9 @@ class FollowMovement(Movement):
 
 class RandomTargetMovement(Movement):
     # moves towards a random target, which is generated with every alert
+
+    RECEIVE_ALERT = True
+
     def alert(self, data, robot):
         # setting robot destination to the coordinates of target robot
         robot.destination = (random.randint(10, 990), random.randint(10, 990))
@@ -241,8 +249,17 @@ class SimpleAvoidMovement(Movement):
 
 class RunMovement(Movement):
     # turns away from closest robot or close objects
+
+    RECEIVE_ALERT = True
+
+    def __init__(self):
+        self.current_threat = None
+
     def alert(self, data, robot):
-        robot.threat = prime_robot(data)
+        self.current_threat = prime_robot(data)
+        # TODO delete this
+        # TODO this WILL blow up!
+        # robot.threat = prime_robot(data)
         return robot.a, robot.a_alpha
 
     def vision(self, data, robot):
@@ -266,7 +283,10 @@ class RunMovement(Movement):
         obj_type, obj_distance = set_object_info(robot)
 
         # calculate robot data
-        threat = robot.threat
+        threat = self.current_threat
+        # TODO delete this
+        # TODO crash when no alert
+        # threat = robot.threat
         threat_coordinates = threat[0]
         threat_angle = calculate_angle_between_vectors(
             threat_coordinates, x, y, v, alpha)
@@ -297,6 +317,9 @@ class RunMovement(Movement):
 
 class ChaseMovement(Movement):
     # moves to given robot, searches if it is not in vision
+
+    OPTIONS = [TARGET_OPTION_STRING]
+
     def __init__(self, target):
         self.target = target
 
@@ -326,6 +349,9 @@ class ChaseMovement(Movement):
 class ChaseMovementGun(Movement):
     # moves to given robot, searches if it is not in vision
     # shoots if target is straight ahead
+
+    OPTIONS = [TARGET_OPTION_STRING]
+
     def __init__(self, target):
         self.target = target
 
@@ -411,6 +437,9 @@ class PermanentGunMovement(RandomTargetMovement):
 class ChaseAvoidMovement(Movement):
     # moves to given robot, searches if it is not in vision
     # avoids close objects
+
+    OPTIONS = [TARGET_OPTION_STRING]
+
     def __init__(self, target):
         self.target = target
 
