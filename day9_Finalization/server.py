@@ -506,6 +506,8 @@ class Board(QWidget):
         # ADD: If you add a new tile type, add its interaction here.
         if final_tile_type == Hazard.Hole:
             robot.deal_damage(1000)
+            
+        # TODO: Insert conditions for addiditial Hazards here
 
         return min_dx, min_dy, v, v_alpha
 
@@ -604,6 +606,8 @@ class Board(QWidget):
 
     def col_bullet_walls(self, bullet):
         # Set of tiles that are passable by bullets.
+        # TODO: If you want your Hazard to leave Bullets through
+        #       insert Hazard.YourNewHazard
         can_pass = {Hazard.Empty}
 
         position = bullet.position
@@ -820,7 +824,7 @@ class Hazard:
     Wall = 1
     Border = 2
     Hole = 3
-
+    # TODO: Insert addiditial Hazards here
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
